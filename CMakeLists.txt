@@ -9,6 +9,14 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(IRIS_EXTENSION_BUILD_ALL ON)
 
+if(WIN32)
+set(STATIC_LIB_SUFFIX .lib)
+elseif(UNIX)
+set(STATIC_LIB_SUFFIX .a)
+else()
+
+endif()
+
 function(get_codec_version)
     set(codec_priv_header "${CMAKE_CURRENT_SOURCE_DIR}/src/IrisCodecPriv.hpp")
     if (NOT EXISTS ${codec_priv_header})
@@ -84,9 +92,13 @@ FetchContent_Populate (
     BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR}/_deps/irisfileextension-build
     FETCHCONTENT_QUIET ON
 )
-set (TURBOJPEG_INSTALL_DIR ${CMAKE_BINARY_DIR}/_deps/turbojpeg/)
-find_file (TURBOJPEG_LIBRARY ${TURBOJPEG_INSTALL_DIR}/lib/libturbojpeg.a)
-if (TURBOJPEG_LIBRARY)
+set (TURBOJPEG_INSTALL_DIR ${CMAKE_BINARY_DIR}/_deps/turbojpeg)
+set (TURBOJPEG_LIBRARY ${TURBOJPEG_INSTALL_DIR}/lib/libturbojpeg${STATIC_LIB_SUFFIX})
+find_file (TURBOJPEG_LIBRARY_PATH libturbojpeg${STATIC_LIB_SUFFIX} ${TURBOJPEG_INSTALL_DIR}/lib)
+if (TURBOJPEG_LIBRARY_PATH)
+    MESSAGE(STATUS "TURBOJPEG found: ${TURBOJPEG_LIBRARY_PATH}")
+else ()
+    MESSAGE(STATUS "TURBOJPEG not found. Set to clone during build process.")
     ExternalProject_Add(
         TurboJpeg
         GIT_REPOSITORY https://github.com/libjpeg-turbo/libjpeg-turbo.git
@@ -97,13 +109,15 @@ if (TURBOJPEG_LIBRARY)
             -DCMAKE_INSTALL_PREFIX:PATH=${TURBOJPEG_INSTALL_DIR}
             -DENABLE_SHARED:BOOL=OFF
     )
-else ()
-    set (TURBOJPEG_LIBRARY ${TURBOJPEG_INSTALL_DIR}/lib/libturbojpeg.a)
 endif()
 
 set (AVIF_INSTALL_DIR ${CMAKE_BINARY_DIR}/_deps/avif)
-find_file(AVIF_LIBRARY ${AVIF_INSTALL_DIR}/lib/libavif.a)
-if (AVIF_LIBRARY)
+set (AVIF_LIBRARY ${AVIF_INSTALL_DIR}/lib/libavif${STATIC_LIB_SUFFIX})
+find_file(AVIF_LIBRARY_PATH libavif${STATIC_LIB_SUFFIX} ${AVIF_INSTALL_DIR}/lib)
+if (AVIF_LIBRARY_PATH)
+    MESSAGE(STATUS "AVIF found: ${AVIF_LIBRARY_PATH}")
+else ()
+    MESSAGE(STATUS "AVIF not found. Set to clone during build process.")
     ExternalProject_Add(
         Avif
         GIT_REPOSITORY https://github.com/AOMediaCodec/libavif.git
@@ -118,8 +132,6 @@ if (AVIF_LIBRARY)
             -DAVIF_LIBYUV=LOCAL
             -DAVIF_CODEC_AOM=LOCAL 
     )
-else ()
-    set (AVIF_LIBRARY ${AVIF_INSTALL_DIR}/lib/libavif.a)
 endif()
 # get_cmake_property(_variableNames VARIABLES)
 # list (SORT _variableNames)
@@ -137,6 +149,9 @@ set(CODEC_INCLUDE_DIR ${PROJECT_SOURCE_DIR}/include)
 set(CODEC_SOURCE_DIR ${PROJECT_SOURCE_DIR}/src)
 set(IFE_SOURCE_DIR ${irisfileextension_SOURCE_DIR}/src)
 option(BUILD_PYTHON "Build IrisCodec Python modules" OFF)
+if (BUILD_PYTHON)
+    message(STATUS "Configured to build Python Module")
+endif()
 
 add_library(
     IrisCodecLib OBJECT
@@ -212,6 +227,10 @@ if(BUILD_PYTHON AND ${PROJECT_IS_TOP_LEVEL})
         PRIVATE $<TARGET_OBJECTS:IrisCodecLib>
         PRIVATE ${TURBOJPEG_LIBRARY}
         PRIVATE ${AVIF_LIBRARY}
+    )
+    set_property(
+        TARGET IrisCodecPython
+        PROPERTY OUTPUT_NAME Iris
     )
 endif()
 if (${PROJECT_IS_TOP_LEVEL})

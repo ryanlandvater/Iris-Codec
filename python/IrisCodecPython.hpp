@@ -116,6 +116,7 @@ static inline void DEFINE_IRIS_CODEC_SUBMODULE (pybind11::module_& base)
     
     py::class_<SlideInfo>                                   (m, "SlideInfo")
         .def_readonly("extent",             &SlideInfo::extent)
+        .def_readonly("encoding",           &SlideInfo::encoding)
         .doc() = "Basic slide information that includes the version of Iris Codec used to encode the slide file, the slide extent, both in lowest resolution pixels and layers comprising number of 256 pixel tiles";
     
     py::class_<Codec::__INTERNAL__Context,  Codec::Context> (m, "Context")
