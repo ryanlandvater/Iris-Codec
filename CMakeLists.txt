@@ -9,14 +9,6 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(IRIS_EXTENSION_BUILD_ALL ON)
 
-if(WIN32)
-set(STATIC_LIB_SUFFIX .lib)
-elseif(UNIX)
-set(STATIC_LIB_SUFFIX .a)
-else()
-
-endif()
-
 function(get_codec_version)
     set(codec_priv_header "${CMAKE_CURRENT_SOURCE_DIR}/src/IrisCodecPriv.hpp")
     if (NOT EXISTS ${codec_priv_header})
@@ -53,22 +45,22 @@ FetchContent_Declare (
     GIT_REPOSITORY https://github.com/IrisDigitalPathology/Iris-Headers.git
     GIT_TAG "origin/main"
     GIT_SHALLOW ON
-    FETCHCONTENT_QUIET ON
+    FETCHCONTENT_UPDATES_DISCONNECTED ON
 )
 FetchContent_Declare (
     VulkanHeaders
     GIT_REPOSITORY https://github.com/KhronosGroup/Vulkan-Headers.git
     GIT_TAG "cacef30"    #"origin/main"
     GIT_SHALLOW ON
-    FETCHCONTENT_QUIET ON
     FIND_PACKAGE_ARGS NAMES Vulkan
+    FETCHCONTENT_UPDATES_DISCONNECTED ON
 )
 FetchContent_Declare (
     VkMemoryAllocator
     GIT_REPOSITORY https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator.git
     GIT_TAG "c788c52" #"origin/master"
     GIT_SHALLOW ON
-    FETCHCONTENT_QUIET ON
+    FETCHCONTENT_UPDATES_DISCONNECTED ON
 )
 FetchContent_MakeAvailable(
     IrisHeaders 
@@ -80,7 +72,7 @@ FetchContent_Populate (
     GIT_REPOSITORY https://github.com/g-truc/glm.git
     GIT_TAG "2d4c4b4" #"origin/master"
     GIT_SHALLOW ON
-    FETCHCONTENT_QUIET ON
+    FETCHCONTENT_UPDATES_DISCONNECTED ON
     SOURCE_DIR ${CMAKE_CURRENT_BINARY_DIR}/_deps/glm-src
 )
 FetchContent_Populate (
@@ -90,40 +82,53 @@ FetchContent_Populate (
     GIT_SHALLOW ON
     SOURCE_DIR ${CMAKE_CURRENT_BINARY_DIR}/_deps/irisfileextension-src
     BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR}/_deps/irisfileextension-build
-    FETCHCONTENT_QUIET ON
 )
-set (TURBOJPEG_INSTALL_DIR ${CMAKE_BINARY_DIR}/_deps/turbojpeg)
-set (TURBOJPEG_LIBRARY ${TURBOJPEG_INSTALL_DIR}/lib/libturbojpeg${STATIC_LIB_SUFFIX})
-find_file (TURBOJPEG_LIBRARY_PATH libturbojpeg${STATIC_LIB_SUFFIX} ${TURBOJPEG_INSTALL_DIR}/lib)
-if (TURBOJPEG_LIBRARY_PATH)
-    MESSAGE(STATUS "TURBOJPEG found: ${TURBOJPEG_LIBRARY_PATH}")
+
+if(WIN32)
+    set(STATIC_LIB_SUFFIX static.lib)
+    set (TURBOJPEG_INSTALL_DIR ${CMAKE_BINARY_DIR}/_deps/turbojpeg)
+    set (TURBOJPEG_LIB_NAME turbojpeg${STATIC_LIB_SUFFIX})
+    set (AVIF_INSTALL_DIR ${CMAKE_BINARY_DIR}/_deps/avif)
+    set (AVIF_LIB_NAME avif${STATIC_LIB_SUFFIX})
+elseif(UNIX)
+    set(STATIC_LIB_SUFFIX .a)
+    set (TURBOJPEG_INSTALL_DIR ${CMAKE_BINARY_DIR}/_deps/turbojpeg)
+    set (TURBOJPEG_LIB_NAME libturbojpeg${STATIC_LIB_SUFFIX})
+    set (AVIF_INSTALL_DIR ${CMAKE_BINARY_DIR}/_deps/avif)
+    set (AVIF_LIB_NAME libavif${STATIC_LIB_SUFFIX})
+endif()
+
+
+find_file (TURBOJPEG_LIBRARY ${TURBOJPEG_LIB_NAME} ${TURBOJPEG_INSTALL_DIR}/lib)
+if (TURBOJPEG_LIBRARY)
+    MESSAGE(STATUS "TURBOJPEG found: ${TURBOJPEG_LIBRARY}")
 else ()
     MESSAGE(STATUS "TURBOJPEG not found. Set to clone during build process.")
+    set (TURBOJPEG_LIBRARY ${TURBOJPEG_INSTALL_DIR}/lib/${TURBOJPEG_LIB_NAME})
     ExternalProject_Add(
         TurboJpeg
         GIT_REPOSITORY https://github.com/libjpeg-turbo/libjpeg-turbo.git
         GIT_TAG "20ade4d" #"origin/main"
         GIT_SHALLOW ON
-        FETCHCONTENT_QUIET ON
+        UPDATE_DISCONNECTED ON
         CMAKE_ARGS
             -DCMAKE_INSTALL_PREFIX:PATH=${TURBOJPEG_INSTALL_DIR}
             -DENABLE_SHARED:BOOL=OFF
     )
 endif()
 
-set (AVIF_INSTALL_DIR ${CMAKE_BINARY_DIR}/_deps/avif)
-set (AVIF_LIBRARY ${AVIF_INSTALL_DIR}/lib/libavif${STATIC_LIB_SUFFIX})
-find_file(AVIF_LIBRARY_PATH libavif${STATIC_LIB_SUFFIX} ${AVIF_INSTALL_DIR}/lib)
-if (AVIF_LIBRARY_PATH)
-    MESSAGE(STATUS "AVIF found: ${AVIF_LIBRARY_PATH}")
+find_file(AVIF_LIBRARY libavif${STATIC_LIB_SUFFIX} ${AVIF_INSTALL_DIR}/lib)
+if (AVIF_LIBRARY)
+    MESSAGE(STATUS "AVIF found: ${AVIF_LIBRARY}")
 else ()
     MESSAGE(STATUS "AVIF not found. Set to clone during build process.")
+    set (AVIF_LIBRARY ${AVIF_INSTALL_DIR}/lib/${AVIF_LIB_NAME})
     ExternalProject_Add(
         Avif
         GIT_REPOSITORY https://github.com/AOMediaCodec/libavif.git
         GIT_TAG "a28899a" #"origin/main"
         GIT_SHALLOW ON
-        FETCHCONTENT_QUIET ON
+        UPDATE_DISCONNECTED ON
         CMAKE_ARGS 
             -DCMAKE_INSTALL_PREFIX:PATH=${AVIF_INSTALL_DIR}
             -DBUILD_SHARED_LIBS=OFF 

@@ -49,6 +49,7 @@ using       AnnotationTypes = Iris::AnnotationTypes;
 using       Annotation      = Iris::Annotation;
 using       Annotations     = Iris::Annotations;
 using       AnnotationGroup = Iris::AnnotationGroup;
+using       BYTE            = Iris::BYTE;
 using       Mutex           = std::mutex;
 using       Offset          = uint64_t;
 using       Size            = uint64_t;
@@ -147,8 +148,22 @@ struct SlideTileReadInfo {
     Format          desiredFormat           = Iris::FORMAT_R8G8B8A8;
 };
 // MARK: - CACHE TYPE DEFINITIONS
+enum CacheEncoding : uint8_t {
+    CACHE_ENCODING_UNDEFINED                = 0,
+    CACHE_ENCODING_IRIS                     = TILE_ENCODING_IRIS,
+    CACHE_ENCODING_JPEG                     = TILE_ENCODING_JPEG,
+    CACHE_ENCODING_AVIF                     = TILE_ENCODING_AVIF,
+    CACHE_ENCODING_LZ,
+    CACHE_ENCODING_NO_COMPRESSION
+};
+enum CacheDataAccess {
+    CACHE_ACCESS_COMPRESS_TILE              = 0, /* Apply codec to compress tile bytes */
+    CACHE_ACCESS_DECOMPRESS_TILE            = 0, /* Apply codec to decompress tile bytes */
+    CACHE_ACCESS_DIRECT_NO_CODEC            = 1, /* Do not apply any compression codec */
+};
 struct CacheCreateInfo {
     Context         context                 = nullptr;
+    CacheEncoding   encodingType            = CACHE_ENCODING_UNDEFINED;
 };
 struct CacheTileReadInfo {
     Cache           cache                   = NULL;
@@ -156,13 +171,14 @@ struct CacheTileReadInfo {
     uint32_t        tileIndex               = 0;
     Buffer          optionalDestination     = NULL;
     Format          desiredFormat           = Iris::FORMAT_R8G8B8A8;
+    CacheDataAccess accessType              = CACHE_ACCESS_DECOMPRESS_TILE;
 };
 struct CacheStoreInfo {
     Cache           cache                   = NULL;
     uint32_t        layerIndex              = 0;
     uint32_t        tileIndex               = 0;
     Buffer          source                  = NULL;
-    size_t          expandedSize            = 0;
+    CacheDataAccess accessType              = CACHE_ACCESS_COMPRESS_TILE;
 };
 
 // MARK: - ENCODER TYPE DEFINITIONS

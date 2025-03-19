@@ -536,15 +536,16 @@ DATA_BLOCK::operator bool() const
 }
 Result DATA_BLOCK::validate_offset(BYTE *const __base) const noexcept
 {
+    const auto _type = std::string(type);
     if (!*this) return Result
-        (IRIS_FAILURE, "Invalid "+type+" object. The "+type+" was not created with a valid offset value.");
+        (IRIS_FAILURE, "Invalid "+_type+" object. The "+_type+" was not created with a valid offset value.");
     if (LOAD_U64 (__base + __offset + VALIDATION) != __offset) Result
-        (IRIS_FAILURE, type+" failed offset validation. The VALIDATION value (" +
+        (IRIS_FAILURE, _type+" failed offset validation. The VALIDATION value (" +
          std::to_string(LOAD_U64 (__base + __offset + VALIDATION)) +
          ") is not the offset location ("+
          std::to_string(__offset)+").");
     if (LOAD_U16 (__base + __offset + RECOVERY) != recovery) Result
-        (IRIS_FAILURE, "RECOVER_"+type+" ("+
+        (IRIS_FAILURE, "RECOVER_"+_type+" ("+
          std::to_string(recovery)+
          ") tag failed validation. The tag value is ("+
          std::to_string(LOAD_U16 (__base + __offset + RECOVERY))+")");

@@ -4,6 +4,7 @@
 //
 //  Created by Ryan Landvater on 1/9/24.
 //
+#include <sstream>
 #include "IrisCodecPriv.hpp"
 #include "IrisCoreVulkan.hpp"
 #include <turbojpeg.h>
