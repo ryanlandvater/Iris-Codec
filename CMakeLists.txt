@@ -85,9 +85,9 @@ FetchContent_Populate (
 )
 
 if(WIN32)
-    set(STATIC_LIB_SUFFIX static.lib)
+    set(STATIC_LIB_SUFFIX .lib)
     set (TURBOJPEG_INSTALL_DIR ${CMAKE_BINARY_DIR}/_deps/turbojpeg)
-    set (TURBOJPEG_LIB_NAME turbojpeg${STATIC_LIB_SUFFIX})
+    set (TURBOJPEG_LIB_NAME turbojpeg-static${STATIC_LIB_SUFFIX})
     set (AVIF_INSTALL_DIR ${CMAKE_BINARY_DIR}/_deps/avif)
     set (AVIF_LIB_NAME avif${STATIC_LIB_SUFFIX})
 elseif(UNIX)
@@ -117,11 +117,11 @@ else ()
     )
 endif()
 
-find_file(AVIF_LIBRARY libavif${STATIC_LIB_SUFFIX} ${AVIF_INSTALL_DIR}/lib)
+find_file(AVIF_LIBRARY ${AVIF_LIB_NAME} ${AVIF_INSTALL_DIR}/lib)
 if (AVIF_LIBRARY)
     MESSAGE(STATUS "AVIF found: ${AVIF_LIBRARY}")
 else ()
-    MESSAGE(STATUS "AVIF not found. Set to clone during build process.")
+    MESSAGE(STATUS "AVIF not found ${AVIF_INSTALL_DIR}/lib/${AVIF_LIB_NAME}. Set to clone during build process.")
     set (AVIF_LIBRARY ${AVIF_INSTALL_DIR}/lib/${AVIF_LIB_NAME})
     ExternalProject_Add(
         Avif

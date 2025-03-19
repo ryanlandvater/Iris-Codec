@@ -4,7 +4,6 @@
 //
 //  Created by Ryan Landvater on 1/9/24.
 //
-
 #include <assert.h>
 #include "IrisCodecPriv.hpp"
 
@@ -37,11 +36,12 @@ Iris::Result is_iris_codec_file(const std::string &file_path) noexcept
         
         return IRIS_SUCCESS;
     } catch (std::runtime_error&e) {
-        std::stringstream log;
-        log         << "Iris File Extension test failed ("
-                    << file_path << "): "
-                    << e.what() << "\n";
-        return Iris::Result (IRIS_FAILURE, log.str());
+        return Iris::Result (
+            IRIS_FAILURE, 
+            "Iris File Extension test failed ("+
+            file_path + "): " +
+            e.what() + "\n"
+        );
     }
 }
 Iris::Result validate_slide (const struct SlideOpenInfo &info) noexcept
@@ -58,14 +58,15 @@ Iris::Result validate_slide (const struct SlideOpenInfo &info) noexcept
         return validate_file_structure(file->ptr, file->size);
         
     } catch (std::runtime_error &e) {
-        std::stringstream log;
-        log         << "Iris File Extension slide ("
-                    << info.filePath << ") failed validation: "
-                    << e.what() << "\n";
         #if IRIS_DEBUG
         std::cerr   << log.str();
         #endif
-        return Iris::Result (IRIS_FAILURE, log.str());
+        return Iris::Result (
+            IRIS_FAILURE, 
+            "Iris File Extension slide (" + 
+            info.filePath + ") failed validation: " +
+            e.what () + "\n"
+        );
     }
 }
 Slide open_slide (const struct SlideOpenInfo &info) noexcept
@@ -193,9 +194,9 @@ Version __INTERNAL__Slide::get_slide_codec_version() const
 SlideInfo __INTERNAL__Slide::get_slide_info() const
 {
     return SlideInfo {
-        .extent         = _abstraction.tileTable.extent,
         .format         = _abstraction.tileTable.format,
         .encoding       = _abstraction.tileTable.encoding,
+        .extent         = _abstraction.tileTable.extent,
         .metadata       = _abstraction.metadata,
     };
 }
