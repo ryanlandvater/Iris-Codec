@@ -1,13 +1,12 @@
- # 2025 Copyright Ryan Landvater
+# 2025 Copyright Ryan Landvater
 # Created 3/3/2025
 
-cmake_minimum_required(VERSION 3.11...3.30)
+cmake_minimum_required(VERSION 3.27)
 include(FetchContent)
 include(ExternalProject)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(IRIS_EXTENSION_BUILD_ALL ON)
 
 function(get_codec_version)
     set(codec_priv_header "${CMAKE_CURRENT_SOURCE_DIR}/src/IrisCodecPriv.hpp")
@@ -40,6 +39,12 @@ endfunction()
 get_codec_version()
 message(STATUS "BUILDING IRIS CODEC COMMUNITY MODULE VERSION v" ${VERSION_STRING})
 
+PROJECT(
+    IrisCodec
+    LANGUAGES CXX
+    VERSION ${VERSION_STRING}
+)
+
 FetchContent_Declare (
     IrisHeaders
     GIT_REPOSITORY https://github.com/IrisDigitalPathology/Iris-Headers.git
@@ -62,11 +67,6 @@ FetchContent_Declare (
     GIT_SHALLOW ON
     FETCHCONTENT_UPDATES_DISCONNECTED ON
 )
-FetchContent_MakeAvailable(
-    IrisHeaders 
-    VulkanHeaders 
-    VkMemoryAllocator
-)
 FetchContent_Populate (
     GLM
     GIT_REPOSITORY https://github.com/g-truc/glm.git
@@ -74,16 +74,24 @@ FetchContent_Populate (
     GIT_SHALLOW ON
     FETCHCONTENT_UPDATES_DISCONNECTED ON
     SOURCE_DIR ${CMAKE_CURRENT_BINARY_DIR}/_deps/glm-src
+    SUBBUILD_DIR ${CMAKE_CURRENT_BINARY_DIR}/_deps/glm-subbuild
+    BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR}/_deps/glm-build
 )
 FetchContent_Populate (
     IrisFileExtension
     GIT_REPOSITORY https://github.com/IrisDigitalPathology/Iris-File-Extension.git
     GIT_TAG "origin/main"
     GIT_SHALLOW ON
+    FETCHCONTENT_UPDATES_DISCONNECTED ON
     SOURCE_DIR ${CMAKE_CURRENT_BINARY_DIR}/_deps/irisfileextension-src
+    SUBBUILD_DIR ${CMAKE_CURRENT_BINARY_DIR}/_deps/irisfileextension-subbuild
     BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR}/_deps/irisfileextension-build
 )
-
+FetchContent_MakeAvailable(
+    IrisHeaders 
+    VulkanHeaders 
+    VkMemoryAllocator
+)
 if(WIN32)
     set(STATIC_LIB_SUFFIX .lib)
     set (TURBOJPEG_INSTALL_DIR ${CMAKE_BINARY_DIR}/_deps/turbojpeg)
@@ -97,7 +105,7 @@ elseif(UNIX)
     set (AVIF_INSTALL_DIR ${CMAKE_BINARY_DIR}/_deps/avif)
     set (AVIF_LIB_NAME libavif${STATIC_LIB_SUFFIX})
 endif()
-
+# if (NOT EXISTS TURBOJPEG_INSTALL_DIR)
 
 find_file (TURBOJPEG_LIBRARY ${TURBOJPEG_LIB_NAME} ${TURBOJPEG_INSTALL_DIR}/lib)
 if (TURBOJPEG_LIBRARY)
@@ -114,6 +122,7 @@ else ()
         CMAKE_ARGS
             -DCMAKE_INSTALL_PREFIX:PATH=${TURBOJPEG_INSTALL_DIR}
             -DENABLE_SHARED:BOOL=OFF
+        FIND_PACKAGE_ARGS NAMES libjpeg-turbo
     )
 endif()
 
@@ -136,20 +145,11 @@ else ()
             -DENABLE_EXAMPLES=OFF
             -DAVIF_LIBYUV=LOCAL
             -DAVIF_CODEC_AOM=LOCAL 
+        FIND_PACKAGE_ARGS NAMES libavif
     )
 endif()
-# get_cmake_property(_variableNames VARIABLES)
-# list (SORT _variableNames)
-# foreach (_variableName ${_variableNames})
-#     message(STATUS "${_variableName}=${${_variableName}}")
-# endforeach()
 
 
-PROJECT(
-    IrisCodec
-    LANGUAGES CXX
-    VERSION ${VERSION_STRING}
-)
 set(CODEC_INCLUDE_DIR ${PROJECT_SOURCE_DIR}/include)
 set(CODEC_SOURCE_DIR ${PROJECT_SOURCE_DIR}/src)
 set(IFE_SOURCE_DIR ${irisfileextension_SOURCE_DIR}/src)
@@ -177,10 +177,8 @@ target_include_directories (
     ${irisheaders_SOURCE_DIR}/priv
     ${vkmemoryallocator_SOURCE_DIR}/include
     ${vulkanheaders_SOURCE_DIR}/include
-    ${TURBOJPEG_INSTALL_DIR}/include
+    ${TURBOJPEG_INSTALL_DIR}/include 
     ${AVIF_INSTALL_DIR}/include
-    # $<BUILD_INTERFACE:${IFE_SOURCE_DIR}>
-    # $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
 target_link_libraries (
     IrisCodecLib
@@ -193,7 +191,7 @@ add_library(
 target_link_libraries(
     IrisCodec
     PRIVATE ${TURBOJPEG_LIBRARY}
-    PRIVATE ${AVIF_LIBRARY}
+    PUBLIC ${AVIF_LIBRARY}
 )
 add_library(
     IrisCodecStatic STATIC 
@@ -202,9 +200,9 @@ add_library(
 target_link_libraries(
     IrisCodecStatic
     PRIVATE ${TURBOJPEG_LIBRARY}
-    PRIVATE ${AVIF_LIBRARY}
+    PUBLIC ${AVIF_LIBRARY}
 )
-if(BUILD_PYTHON AND ${PROJECT_IS_TOP_LEVEL})
+if(BUILD_PYTHON)
     set(PYBIND11_FINDPYTHON ON)
     FetchContent_Declare (
         Pybind11
@@ -237,6 +235,19 @@ if(BUILD_PYTHON AND ${PROJECT_IS_TOP_LEVEL})
         TARGET IrisCodecPython
         PROPERTY OUTPUT_NAME Iris
     )
+    install(
+        TARGETS IrisCodecPython
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/python/Iris
+    )
+    # pybind11_add_module(
+    #     IrisEncoderPython
+    #     ${PROJECT_SOURCE_DIR}/python/IrisCodecPython.cpp
+    # )
+    install(
+        DIRECTORY ${PROJECT_SOURCE_DIR}/python/Iris 
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/python)
+        #   FILES_MATCHING PATTERN "*.dae"  PATTERN "*.py")
+        
 endif()
 if (${PROJECT_IS_TOP_LEVEL})
     install(
@@ -263,3 +274,9 @@ if (${PROJECT_IS_TOP_LEVEL})
     )
 endif(${PROJECT_IS_TOP_LEVEL})
 
+#Debug print variables
+# get_cmake_property(_variableNames VARIABLES)
+# list (SORT _variableNames)
+# foreach (_variableName ${_variableNames})
+#     message(STATUS "${_variableName}=${${_variableName}}")
+# endforeach()
