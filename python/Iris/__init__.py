@@ -1,5 +1,5 @@
-from .Iris import Core
+from . import Iris
 from .Iris import Codec
-__all__ = ['Core','Codec']
-version = Core.get_version()
+__all__ = ['Codec']
+version = Codec.get_codec_version()
 __version__=f'{version.major}.{version.minor}.{version.build}'

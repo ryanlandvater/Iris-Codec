@@ -7,6 +7,19 @@ include(ExternalProject)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+option(IRIS_BUILD_SHARED "Build IrisCodec Shared Library" ON)
+option(IRIS_BUILD_STATIC "Build IrisCodec Static Library" ON)
+option(IRIS_BUILD_ENCODER "Build the IrisCodec Encoder executable" ON)
+option(IRIS_BUILD_PYTHON "Build IrisCodec Python modules" OFF)
+option(IRIS_BUILD_DEPENDENCIES "Build all dependencies and statically link into self-contained binary" OFF)
+
+if (IRIS_BUILD_DEPENDENCIES)
+    message(STATUS "Iris Codec is configured to build all dependencies and statically link into a single self-contained binary.")
+endif()
+if (IRIS_BUILD_PYTHON)
+    message(STATUS "Iris Codec is configured to build Python Module")
+endif()
+
 
 function(get_codec_version)
     set(codec_priv_header "${CMAKE_CURRENT_SOURCE_DIR}/src/IrisCodecPriv.hpp")
@@ -73,6 +86,7 @@ FetchContent_Populate (
     GIT_TAG "2d4c4b4" #"origin/master"
     GIT_SHALLOW ON
     FETCHCONTENT_UPDATES_DISCONNECTED ON
+    FETCHCONTENT_QUIET ON
     SOURCE_DIR ${CMAKE_CURRENT_BINARY_DIR}/_deps/glm-src
     SUBBUILD_DIR ${CMAKE_CURRENT_BINARY_DIR}/_deps/glm-subbuild
     BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR}/_deps/glm-build
@@ -83,6 +97,7 @@ FetchContent_Populate (
     GIT_TAG "origin/main"
     GIT_SHALLOW ON
     FETCHCONTENT_UPDATES_DISCONNECTED ON
+    FETCHCONTENT_QUIET ON
     SOURCE_DIR ${CMAKE_CURRENT_BINARY_DIR}/_deps/irisfileextension-src
     SUBBUILD_DIR ${CMAKE_CURRENT_BINARY_DIR}/_deps/irisfileextension-subbuild
     BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR}/_deps/irisfileextension-build
@@ -92,83 +107,42 @@ FetchContent_MakeAvailable(
     VulkanHeaders 
     VkMemoryAllocator
 )
-if(WIN32)
-    set(STATIC_LIB_SUFFIX .lib)
-    set (TURBOJPEG_INSTALL_DIR ${CMAKE_BINARY_DIR}/_deps/turbojpeg)
-    set (TURBOJPEG_LIB_NAME turbojpeg-static${STATIC_LIB_SUFFIX})
-    set (AVIF_INSTALL_DIR ${CMAKE_BINARY_DIR}/_deps/avif)
-    set (AVIF_LIB_NAME avif${STATIC_LIB_SUFFIX})
-elseif(UNIX)
-    set(STATIC_LIB_SUFFIX .a)
-    set (TURBOJPEG_INSTALL_DIR ${CMAKE_BINARY_DIR}/_deps/turbojpeg)
-    set (TURBOJPEG_LIB_NAME libturbojpeg${STATIC_LIB_SUFFIX})
-    set (AVIF_INSTALL_DIR ${CMAKE_BINARY_DIR}/_deps/avif)
-    set (AVIF_LIB_NAME libavif${STATIC_LIB_SUFFIX})
-endif()
-# if (NOT EXISTS TURBOJPEG_INSTALL_DIR)
 
-find_file (TURBOJPEG_LIBRARY ${TURBOJPEG_LIB_NAME} ${TURBOJPEG_INSTALL_DIR}/lib)
-if (TURBOJPEG_LIBRARY)
-    MESSAGE(STATUS "TURBOJPEG found: ${TURBOJPEG_LIBRARY}")
-else ()
-    MESSAGE(STATUS "TURBOJPEG not found. Set to clone during build process.")
-    set (TURBOJPEG_LIBRARY ${TURBOJPEG_INSTALL_DIR}/lib/${TURBOJPEG_LIB_NAME})
-    ExternalProject_Add(
-        TurboJpeg
-        GIT_REPOSITORY https://github.com/libjpeg-turbo/libjpeg-turbo.git
-        GIT_TAG "20ade4d" #"origin/main"
-        GIT_SHALLOW ON
-        UPDATE_DISCONNECTED ON
-        CMAKE_ARGS
-            -DCMAKE_INSTALL_PREFIX:PATH=${TURBOJPEG_INSTALL_DIR}
-            -DENABLE_SHARED:BOOL=OFF
-        FIND_PACKAGE_ARGS NAMES libjpeg-turbo
-    )
-endif()
 
-find_file(AVIF_LIBRARY ${AVIF_LIB_NAME} ${AVIF_INSTALL_DIR}/lib)
-if (AVIF_LIBRARY)
-    MESSAGE(STATUS "AVIF found: ${AVIF_LIBRARY}")
-else ()
-    MESSAGE(STATUS "AVIF not found ${AVIF_INSTALL_DIR}/lib/${AVIF_LIB_NAME}. Set to clone during build process.")
-    set (AVIF_LIBRARY ${AVIF_INSTALL_DIR}/lib/${AVIF_LIB_NAME})
-    ExternalProject_Add(
-        Avif
-        GIT_REPOSITORY https://github.com/AOMediaCodec/libavif.git
-        GIT_TAG "a28899a" #"origin/main"
-        GIT_SHALLOW ON
-        UPDATE_DISCONNECTED ON
-        CMAKE_ARGS 
-            -DCMAKE_INSTALL_PREFIX:PATH=${AVIF_INSTALL_DIR}
-            -DBUILD_SHARED_LIBS=OFF 
-            -DENABLE_TOOLS=OFF
-            -DENABLE_EXAMPLES=OFF
-            -DAVIF_LIBYUV=LOCAL
-            -DAVIF_CODEC_AOM=LOCAL 
-        FIND_PACKAGE_ARGS NAMES libavif
-    )
-endif()
-
+include(./cmake/turbo-jpeg.cmake)
+include(./cmake/avif.cmake)
 
 set(CODEC_INCLUDE_DIR ${PROJECT_SOURCE_DIR}/include)
 set(CODEC_SOURCE_DIR ${PROJECT_SOURCE_DIR}/src)
 set(IFE_SOURCE_DIR ${irisfileextension_SOURCE_DIR}/src)
-option(BUILD_PYTHON "Build IrisCodec Python modules" OFF)
-if (BUILD_PYTHON)
-    message(STATUS "Configured to build Python Module")
-endif()
 
-add_library(
-    IrisCodecLib OBJECT
-)
-target_sources (
-    IrisCodecLib PRIVATE
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Iris Codec Universal Object Build
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+set (
+    IrisCodecSources
     ${IFE_SOURCE_DIR}/IrisCodecExtension.cpp
     ${CODEC_SOURCE_DIR}/IrisCodecContext.cpp
     ${CODEC_SOURCE_DIR}/IrisCodecFile.cpp
     ${CODEC_SOURCE_DIR}/IrisCodecCache.cpp
     ${CODEC_SOURCE_DIR}/IrisCodecSlide.cpp
     ${irisheaders_SOURCE_DIR}/src/IrisBuffer.cpp
+)
+set (
+    IrisCodecDependencies
+    ${TURBOJPEG_LIBRARY}
+    ${AVIF_LIBRARY}
+)
+# if (IRIS_BUILD_ENCODER)
+#     message(STATUS "BUILDING IRIS CODEC ENCODER: Encoding from vendor files requires Openslide")
+#     find_library (OPENSLIDE_LIB openslide REQUIRED)
+#     message(STATUS "Found OPENSLIDE_LIB: ${OPENSLIDE_LIB}")
+#     set(IrisCodecSources ${IrisCodecSources} ${CODEC_SOURCE_DIR}/IrisCodecEncoder.cpp)
+# endif(IRIS_BUILD_ENCODER)
+
+add_library(
+    IrisCodecLib OBJECT
+    ${IrisCodecSources}
 )
 target_include_directories (
     IrisCodecLib PRIVATE
@@ -177,32 +151,76 @@ target_include_directories (
     ${irisheaders_SOURCE_DIR}/priv
     ${vkmemoryallocator_SOURCE_DIR}/include
     ${vulkanheaders_SOURCE_DIR}/include
-    ${TURBOJPEG_INSTALL_DIR}/include 
-    ${AVIF_INSTALL_DIR}/include
 )
 target_link_libraries (
     IrisCodecLib
     PUBLIC IrisHeaders
 )
-add_library(
-    IrisCodec SHARED 
-    $<TARGET_OBJECTS:IrisCodecLib>
-)
-target_link_libraries(
-    IrisCodec
-    PRIVATE ${TURBOJPEG_LIBRARY}
-    PUBLIC ${AVIF_LIBRARY}
-)
-add_library(
-    IrisCodecStatic STATIC 
-    $<TARGET_OBJECTS:IrisCodecLib>
-)
-target_link_libraries(
-    IrisCodecStatic
-    PRIVATE ${TURBOJPEG_LIBRARY}
-    PUBLIC ${AVIF_LIBRARY}
-)
-if(BUILD_PYTHON)
+if (TURBOJPEG_EXTERNAL_PROJECT_ADD) 
+    add_dependencies(IrisCodecLib TurboJpeg)
+endif()
+if (AVIF_EXTERNAL_PROJECT_ADD) 
+    add_dependencies(IrisCodecLib Avif)
+endif()
+
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Iris Codec Shared Lib Build
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+if (IRIS_BUILD_SHARED)
+    add_library(
+        IrisCodec SHARED 
+        $<TARGET_OBJECTS:IrisCodecLib>
+    )
+    target_link_libraries(
+        IrisCodec
+        PRIVATE ${TURBOJPEG_LIBRARY}
+        PRIVATE ${AVIF_LIBRARY}
+    )
+endif(IRIS_BUILD_SHARED)
+
+if (IRIS_BUILD_STATIC)
+    add_library(
+        IrisCodecStatic STATIC 
+        $<TARGET_OBJECTS:IrisCodecLib>
+    )
+    target_link_libraries(
+        IrisCodecStatic
+        PRIVATE ${TURBOJPEG_LIBRARY}
+        PRIVATE ${AVIF_LIBRARY}
+    )
+endif(IRIS_BUILD_STATIC)
+
+if(IRIS_BUILD_ENCODER)
+    # message(STATUS "Encoder requires Openslide")
+    # find_library (OPENSLIDE_LIB openslide REQUIRED)
+    # message(STATUS "Found OPENSLIDE_LIB: ${OPENSLIDE_LIB}")
+    # add_library (
+    #     EncoderObject OBJECT
+    #     $<TARGET_OBJECTS:IrisCodecLib>
+    #     ${CODEC_SOURCE_DIR}/IrisCodecEncoder.cpp
+    # )
+    # target_include_directories (
+    #     EncoderObject PRIVATE
+    #     ${irisheaders_SOURCE_DIR}/include
+    #     ${irisheaders_SOURCE_DIR}/priv
+    # )
+    # add_executable (
+    #     Encoder
+    #     $<TARGET_OBJECTS:IrisCodecLib>
+    #     $<TARGET_OBJECTS:EncoderObject>
+    #     ${CODEC_SOURCE_DIR}/EncoderMain.cpp
+    # )
+    # target_link_libraries (
+    #     Encoder
+    #     PRIVATE IrisHeaders
+    #     PRIVATE ${TURBOJPEG_LIBRARY}
+    #     PRIVATE ${AVIF_LIBRARY}
+    #     PRIVATE ${OPENSLIDE_LIB}
+    # )
+endif()
+
+if(IRIS_BUILD_PYTHON)
     set(PYBIND11_FINDPYTHON ON)
     FetchContent_Declare (
         Pybind11
@@ -245,8 +263,8 @@ if(BUILD_PYTHON)
     # )
     install(
         DIRECTORY ${PROJECT_SOURCE_DIR}/python/Iris 
-        DESTINATION ${CMAKE_INSTALL_LIBDIR}/python)
-        #   FILES_MATCHING PATTERN "*.dae"  PATTERN "*.py")
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/python
+    )
         
 endif()
 if (${PROJECT_IS_TOP_LEVEL})
@@ -280,3 +298,7 @@ endif(${PROJECT_IS_TOP_LEVEL})
 # foreach (_variableName ${_variableNames})
 #     message(STATUS "${_variableName}=${${_variableName}}")
 # endforeach()
+# CMAKE_SHARED_LIBRARY_PREFIX
+# CMAKE_SHARED_LIBRARY_SUFFIX
+# CMAKE_STATIC_LIBRARY_PREFIX
+# CMAKE_STATIC_LIBRARY_SUFFIX

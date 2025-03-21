@@ -40,7 +40,6 @@
 #include <math.h>
 #include <float.h>
 #include <iostream>
-#include <sstream>
 #include <assert.h>
 #include "IrisTypes.hpp"
 #include "IrisBuffer.hpp"
