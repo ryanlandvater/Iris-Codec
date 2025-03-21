@@ -108,17 +108,15 @@ FetchContent_MakeAvailable(
     VkMemoryAllocator
 )
 
-
+# Include external projects, if needed
 include(./cmake/turbo-jpeg.cmake)
 include(./cmake/avif.cmake)
-
-set(CODEC_INCLUDE_DIR ${PROJECT_SOURCE_DIR}/include)
-set(CODEC_SOURCE_DIR ${PROJECT_SOURCE_DIR}/src)
-set(IFE_SOURCE_DIR ${irisfileextension_SOURCE_DIR}/src)
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Iris Codec Universal Object Build
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+set(IFE_SOURCE_DIR ${irisfileextension_SOURCE_DIR}/src)
+set(CODEC_SOURCE_DIR ${PROJECT_SOURCE_DIR}/src)
 set (
     IrisCodecSources
     ${IFE_SOURCE_DIR}/IrisCodecExtension.cpp
@@ -129,16 +127,27 @@ set (
     ${irisheaders_SOURCE_DIR}/src/IrisBuffer.cpp
 )
 set (
+    IrisCodecInclude
+    ${IFE_SOURCE_DIR}
+    ${glm_SOURCE_DIR}
+    ${irisheaders_SOURCE_DIR}/priv
+    ${vkmemoryallocator_SOURCE_DIR}/include
+    ${vulkanheaders_SOURCE_DIR}/include
+)
+set (
     IrisCodecDependencies
     ${TURBOJPEG_LIBRARY}
     ${AVIF_LIBRARY}
 )
-# if (IRIS_BUILD_ENCODER)
-#     message(STATUS "BUILDING IRIS CODEC ENCODER: Encoding from vendor files requires Openslide")
-#     find_library (OPENSLIDE_LIB openslide REQUIRED)
-#     message(STATUS "Found OPENSLIDE_LIB: ${OPENSLIDE_LIB}")
-#     set(IrisCodecSources ${IrisCodecSources} ${CODEC_SOURCE_DIR}/IrisCodecEncoder.cpp)
-# endif(IRIS_BUILD_ENCODER)
+if (IRIS_BUILD_ENCODER)
+    message(STATUS "BUILDING IRIS CODEC ENCODER: Encoding from vendor files requires Openslide")
+    find_library (OPENSLIDE_LIB openslide REQUIRED)
+    find_path(OPENSLIDE_DIR openslide/openslide.h)
+    message(STATUS "Found OPENSLIDE_LIB: ${OPENSLIDE_LIB}")
+    set(IrisCodecSources ${IrisCodecSources} ${CODEC_SOURCE_DIR}/IrisCodecEncoder.cpp)
+    set(IrisCodecInclude ${IrisCodecInclude} ${OPENSLIDE_DIR})
+    set(IrisCodecDependencies ${IrisCodecDependencies} ${OPENSLIDE_LIB})
+endif(IRIS_BUILD_ENCODER)
 
 add_library(
     IrisCodecLib OBJECT
@@ -146,11 +155,7 @@ add_library(
 )
 target_include_directories (
     IrisCodecLib PRIVATE
-    ${IFE_SOURCE_DIR}
-    ${glm_SOURCE_DIR}
-    ${irisheaders_SOURCE_DIR}/priv
-    ${vkmemoryallocator_SOURCE_DIR}/include
-    ${vulkanheaders_SOURCE_DIR}/include
+    ${IrisCodecInclude}
 )
 target_link_libraries (
     IrisCodecLib
@@ -164,9 +169,12 @@ if (AVIF_EXTERNAL_PROJECT_ADD)
 endif()
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# Iris Codec Shared Lib Build
+# Iris Codec Targets (ie what we are installing)
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
+set (
+    IrisCodecTargets
+    IrisCodecLib
+)
 if (IRIS_BUILD_SHARED)
     add_library(
         IrisCodec SHARED 
@@ -174,9 +182,9 @@ if (IRIS_BUILD_SHARED)
     )
     target_link_libraries(
         IrisCodec
-        PRIVATE ${TURBOJPEG_LIBRARY}
-        PRIVATE ${AVIF_LIBRARY}
+        PRIVATE ${IrisCodecDependencies}
     )
+    set(IrisCodecTargets ${IrisCodecTargets} IrisCodec)
 endif(IRIS_BUILD_SHARED)
 
 if (IRIS_BUILD_STATIC)
@@ -186,39 +194,57 @@ if (IRIS_BUILD_STATIC)
     )
     target_link_libraries(
         IrisCodecStatic
-        PRIVATE ${TURBOJPEG_LIBRARY}
-        PRIVATE ${AVIF_LIBRARY}
+        PRIVATE ${IrisCodecDependencies}
     )
+    set(IrisCodecTargets ${IrisCodecTargets} IrisCodecStatic)
 endif(IRIS_BUILD_STATIC)
 
-if(IRIS_BUILD_ENCODER)
-    # message(STATUS "Encoder requires Openslide")
-    # find_library (OPENSLIDE_LIB openslide REQUIRED)
-    # message(STATUS "Found OPENSLIDE_LIB: ${OPENSLIDE_LIB}")
-    # add_library (
-    #     EncoderObject OBJECT
-    #     $<TARGET_OBJECTS:IrisCodecLib>
-    #     ${CODEC_SOURCE_DIR}/IrisCodecEncoder.cpp
-    # )
-    # target_include_directories (
-    #     EncoderObject PRIVATE
-    #     ${irisheaders_SOURCE_DIR}/include
-    #     ${irisheaders_SOURCE_DIR}/priv
-    # )
-    # add_executable (
-    #     Encoder
-    #     $<TARGET_OBJECTS:IrisCodecLib>
-    #     $<TARGET_OBJECTS:EncoderObject>
-    #     ${CODEC_SOURCE_DIR}/EncoderMain.cpp
-    # )
-    # target_link_libraries (
-    #     Encoder
-    #     PRIVATE IrisHeaders
-    #     PRIVATE ${TURBOJPEG_LIBRARY}
-    #     PRIVATE ${AVIF_LIBRARY}
-    #     PRIVATE ${OPENSLIDE_LIB}
-    # )
-endif()
+if (IRIS_BUILD_ENCODER)
+    add_executable (
+        IrisCodecEncoder
+        $<TARGET_OBJECTS:IrisCodecLib>
+        ${CODEC_SOURCE_DIR}/EncoderMain.cpp
+    )
+    target_link_libraries (
+        IrisCodecEncoder
+        PRIVATE IrisHeaders
+        PRIVATE ${IrisCodecDependencies}
+    )
+    set(IrisCodecTargets ${IrisCodecTargets} IrisCodecEncoder)
+endif(IRIS_BUILD_ENCODER)
+
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Installation
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+if (${PROJECT_IS_TOP_LEVEL})
+    install(
+        TARGETS IrisHeaders
+        EXPORT IrisHeadersConfig
+        FILE_SET HEADERS DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/Iris
+    )
+    install(
+        EXPORT IrisHeadersConfig
+        FILE IrisHeadersConfig.cmake
+        NAMESPACE "Iris::"
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/Iris
+    )
+    install(
+        TARGETS ${IrisCodecTargets}
+        EXPORT IrisCodecConfig
+        FILE_SET HEADERS DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/Iris
+    )
+    install(
+        EXPORT IrisCodecConfig
+        FILE IrisCodecConfig.cmake
+        NAMESPACE "IrisCodec::"
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/Iris
+    )
+endif(${PROJECT_IS_TOP_LEVEL})
+
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Python support (including installation)
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 if(IRIS_BUILD_PYTHON)
     set(PYBIND11_FINDPYTHON ON)
@@ -234,20 +260,18 @@ if(IRIS_BUILD_PYTHON)
     )
     pybind11_add_module(
         IrisCodecPython
+        $<TARGET_OBJECTS:IrisCodecLib>
         ${PROJECT_SOURCE_DIR}/python/IrisCodecPython.cpp
     )
     target_include_directories (
-        IrisCodecPython PRIVATE
-        ${IFE_SOURCE_DIR}
-        ${CODEC_SOURCE_DIR}
-        ${irisheaders_SOURCE_DIR}/priv
+        IrisCodecPython 
+        PRIVATE ${irisheaders_SOURCE_DIR}/priv
+        PRIVATE ${CODEC_SOURCE_DIR}
     )
     target_link_libraries (
         IrisCodecPython
         PRIVATE IrisHeaders
-        PRIVATE $<TARGET_OBJECTS:IrisCodecLib>
-        PRIVATE ${TURBOJPEG_LIBRARY}
-        PRIVATE ${AVIF_LIBRARY}
+        PRIVATE ${IrisCodecDependencies}
     )
     set_property(
         TARGET IrisCodecPython
@@ -257,41 +281,44 @@ if(IRIS_BUILD_PYTHON)
         TARGETS IrisCodecPython
         DESTINATION ${CMAKE_INSTALL_LIBDIR}/python/Iris
     )
+    if (IRIS_BUILD_ENCODER)
+        pybind11_add_module(
+            IrisCodecEncoderPython
+            $<TARGET_OBJECTS:IrisCodecLib>
+            ${PROJECT_SOURCE_DIR}/python/IrisEncoderPython.cpp
+        )
+        target_include_directories (
+            IrisCodecEncoderPython 
+            PRIVATE ${irisheaders_SOURCE_DIR}/priv
+            PRIVATE ${CODEC_SOURCE_DIR}
+        )
+        target_link_libraries (
+            IrisCodecEncoderPython
+            PRIVATE IrisHeaders
+            PRIVATE ${IrisCodecDependencies}
+        )
+        set_property(
+            TARGET IrisCodecEncoderPython
+            PROPERTY OUTPUT_NAME Encoder
+        )
+        install(
+            TARGETS IrisCodecEncoderPython
+            DESTINATION ${CMAKE_INSTALL_LIBDIR}/python/Iris/Encoder
+        )
+    endif()
+
     # pybind11_add_module(
     #     IrisEncoderPython
     #     ${PROJECT_SOURCE_DIR}/python/IrisCodecPython.cpp
     # )
+
+
     install(
         DIRECTORY ${PROJECT_SOURCE_DIR}/python/Iris 
         DESTINATION ${CMAKE_INSTALL_LIBDIR}/python
     )
         
 endif()
-if (${PROJECT_IS_TOP_LEVEL})
-    install(
-        TARGETS IrisHeaders
-        EXPORT IrisHeadersConfig
-        FILE_SET HEADERS DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/Iris
-    )
-    install(
-        EXPORT IrisHeadersConfig
-        FILE IrisHeadersConfig.cmake
-        NAMESPACE "Iris::"
-        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/Iris
-    )
-    install(
-        TARGETS IrisCodecLib IrisCodec IrisCodecStatic 
-        EXPORT IrisCodecConfig
-        FILE_SET HEADERS DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/Iris
-    )
-    install(
-        EXPORT IrisCodecConfig
-        FILE IrisCodecConfig.cmake
-        NAMESPACE "IrisCodec::"
-        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/Iris
-    )
-endif(${PROJECT_IS_TOP_LEVEL})
-
 #Debug print variables
 # get_cmake_property(_variableNames VARIABLES)
 # list (SORT _variableNames)

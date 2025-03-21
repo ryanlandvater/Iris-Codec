@@ -1,9 +1,10 @@
 from __future__ import absolute_import
 import os, platform, sys, time
-from ..Iris import Core, Codec
+from .. import Iris
+from ..Iris import Codec
 from .Encoder import *
 __all__ = ['encode_slide_file']
-def encode_slide_file (source: str, outdir: str = '', desired_encoding: Codec.Encoding = Codec.Encoding.ENCODING_JPEG, desired_byte_format: Core.Format = Core.Format.FORMAT_R8G8B8, strip_metadata: bool = False) -> Core.Result:
+def encode_slide_file (source: str, outdir: str = '', desired_encoding: Codec.Encoding = Codec.Encoding.TILE_ENCODING_JPEG, desired_byte_format: Iris.Format = Iris.Format.FORMAT_R8G8B8, strip_metadata: bool = False) -> Iris.Result:
     encoder = None
     try: 
         # Check the source file to see if it is a valid OS file path
