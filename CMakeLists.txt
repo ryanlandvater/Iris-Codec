@@ -13,14 +13,6 @@ option(IRIS_BUILD_ENCODER "Build the IrisCodec Encoder executable" ON)
 option(IRIS_BUILD_PYTHON "Build IrisCodec Python modules" OFF)
 option(IRIS_BUILD_DEPENDENCIES "Build all dependencies and statically link into self-contained binary" OFF)
 
-if (IRIS_BUILD_DEPENDENCIES)
-    message(STATUS "Iris Codec is configured to build all dependencies and statically link into a single self-contained binary.")
-endif()
-if (IRIS_BUILD_PYTHON)
-    message(STATUS "Iris Codec is configured to build Python Module")
-endif()
-
-
 function(get_codec_version)
     set(codec_priv_header "${CMAKE_CURRENT_SOURCE_DIR}/src/IrisCodecPriv.hpp")
     if (NOT EXISTS ${codec_priv_header})
@@ -49,8 +41,17 @@ function(get_codec_version)
 
     set(VERSION_STRING "${MAJOR_VERSION}.${MINOR_VERSION}.${BUILD_NUMBER}" PARENT_SCOPE)
 endfunction()
+
 get_codec_version()
 message(STATUS "BUILDING IRIS CODEC COMMUNITY MODULE VERSION v" ${VERSION_STRING})
+if (IRIS_BUILD_DEPENDENCIES)
+    message(STATUS "Iris Codec is configured to build all dependencies and statically link into a single self-contained binary.")
+endif()
+if (IRIS_BUILD_PYTHON)
+    message(STATUS "Iris Codec is configured to build Python Module")
+endif()
+
+
 
 PROJECT(
     IrisCodec

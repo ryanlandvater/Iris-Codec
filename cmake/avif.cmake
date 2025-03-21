@@ -14,8 +14,14 @@ if (NOT IRIS_BUILD_DEPENDENCIES)
     find_path(AVIF_INCLUDE avif/avif.h)
 endif()
 
-if (AVIF_LIBRARY)
-    MESSAGE(STATUS "AVIF found: ${AVIF_LIBRARY}")
+#if that does not work, check to see if it was made in a previous build
+if (NOT AVIF_LIBRARY OR NOT AVIF_INCLUDE)
+    find_file (AVIF_LIBRARY ${TURBOJPEG_LIB_NAME} ${TURBOJPEG_INSTALL_DIR}/lib)
+    find_path (AVIF_INCLUDE turbojpeg.h HINTS ${TURBOJPEG_INSTALL_DIR})
+endif()
+
+if (AVIF_LIBRARY AND AVIF_INCLUDE)
+    MESSAGE(STATUS "AVIF found from previous build attempt: ${AVIF_LIBRARY}")
 else ()
     MESSAGE(STATUS "AVIF not found ${AVIF_INSTALL_DIR}/lib/${AVIF_LIB_NAME}. Set to clone during build process.")
     set(AVIF_EXTERNAL_PROJECT_ADD ON)
@@ -34,6 +40,7 @@ else ()
             -DENABLE_EXAMPLES=OFF
             -DAVIF_LIBYUV=LOCAL
             -DAVIF_CODEC_AOM=LOCAL 
+            -DCMAKE_TOOLCHAIN_FILE=${CMAKE_TOOLCHAIN_FILE}
         FIND_PACKAGE_ARGS NAMES libavif
         BUILD_BYPRODUCTS ${AVIF_LIBRARY}
     )
