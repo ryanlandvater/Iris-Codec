@@ -176,7 +176,7 @@ set (
     IrisCodecTargets
     IrisCodecLib
 )
-if (IRIS_BUILD_SHARED)
+if (IRIS_BUILD_SHARED OR IRIS_BUILD_PYTHON)
     add_library(
         IrisCodec SHARED 
         $<TARGET_OBJECTS:IrisCodecLib>
