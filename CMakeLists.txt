@@ -212,7 +212,7 @@ if (IRIS_BUILD_ENCODER AND (IRIS_BUILD_SHARED OR IRIS_BUILD_STATIC))
         PRIVATE ${IrisCodecDependencies}
     )
     set(IrisCodecTargets ${IrisCodecTargets} IrisCodecEncoder)
-endif(IRIS_BUILD_ENCODER)
+endif()
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Installation
@@ -249,7 +249,6 @@ endif(${PROJECT_IS_TOP_LEVEL})
 
 if(IRIS_BUILD_PYTHON)
     set(PYBIND11_FINDPYTHON ON)
-    set(IRIS_PYTHON_INSTALL_DIR ${CMAKE_INSTALL_LIBDIR}/python/site-packages/Iris)
     FetchContent_Declare (
         Pybind11
         GIT_REPOSITORY https://github.com/pybind/pybind11.git
@@ -260,6 +259,7 @@ if(IRIS_BUILD_PYTHON)
     FetchContent_MakeAvailable (
         Pybind11
     )
+    set(IRIS_PYTHON_INSTALL_DIR ${CMAKE_INSTALL_LIBDIR}/python${Python_VERSION_MAJOR}.${Python_VERSION_MINOR}/site-packages)
     pybind11_add_module(
         IrisCodecPython
         $<TARGET_OBJECTS:IrisCodecLib>
@@ -281,7 +281,7 @@ if(IRIS_BUILD_PYTHON)
     )
     install(
         TARGETS IrisCodecPython
-        DESTINATION ${CMAKE_INSTALL_LIBDIR}/python/Iris
+        DESTINATION ${IRIS_PYTHON_INSTALL_DIR}/Iris
     )
     if (IRIS_BUILD_ENCODER)
         pybind11_add_module(
@@ -305,22 +305,17 @@ if(IRIS_BUILD_PYTHON)
         )
         install(
             TARGETS IrisCodecEncoderPython
-            DESTINATION ${CMAKE_INSTALL_LIBDIR}/python/site-packages/Iris/Encoder
+            DESTINATION ${IRIS_PYTHON_INSTALL_DIR}/Iris/Encoder
         )
     endif()
-
-    # pybind11_add_module(
-    #     IrisEncoderPython
-    #     ${PROJECT_SOURCE_DIR}/python/IrisCodecPython.cpp
-    # )
-
-
+    
     install(
         DIRECTORY ${PROJECT_SOURCE_DIR}/python/Iris 
-        DESTINATION ${CMAKE_INSTALL_LIBDIR}/python
+        DESTINATION ${IRIS_PYTHON_INSTALL_DIR}/
     )
         
 endif()
+
 #Debug print variables
 # get_cmake_property(_variableNames VARIABLES)
 # list (SORT _variableNames)
