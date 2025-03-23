@@ -186,7 +186,7 @@ if (IRIS_BUILD_SHARED OR IRIS_BUILD_PYTHON)
         PRIVATE ${IrisCodecDependencies}
     )
     set(IrisCodecTargets ${IrisCodecTargets} IrisCodec)
-endif(IRIS_BUILD_SHARED)
+endif()
 
 if (IRIS_BUILD_STATIC)
     add_library(
@@ -206,6 +206,7 @@ if (IRIS_BUILD_ENCODER AND (IRIS_BUILD_SHARED OR IRIS_BUILD_STATIC))
         $<TARGET_OBJECTS:IrisCodecLib>
         ${CODEC_SOURCE_DIR}/EncoderMain.cpp
     )
+
     target_link_libraries (
         IrisCodecEncoder
         PRIVATE IrisHeaders
@@ -268,6 +269,7 @@ if(IRIS_BUILD_PYTHON)
     target_include_directories (
         IrisCodecPython 
         PRIVATE ${irisheaders_SOURCE_DIR}/priv
+        PRIVATE ${IFE_SOURCE_DIR}
         PRIVATE ${CODEC_SOURCE_DIR}
     )
     target_link_libraries (
@@ -292,6 +294,7 @@ if(IRIS_BUILD_PYTHON)
         target_include_directories (
             IrisCodecEncoderPython 
             PRIVATE ${irisheaders_SOURCE_DIR}/priv
+            PRIVATE ${IFE_SOURCE_DIR}
             PRIVATE ${CODEC_SOURCE_DIR}
         )
         target_link_libraries (
