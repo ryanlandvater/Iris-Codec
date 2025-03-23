@@ -4,6 +4,7 @@
 //
 //  Created by Ryan Landvater on 8/2/22.
 //
+#include <cmath>
 #include <filesystem>
 #include <openslide/openslide.h>
 #include "IrisCodecPriv.hpp"
@@ -29,8 +30,8 @@ inline void SET_SLIDE_EXTENT_OPENSLIDE (EncoderSource& src)
     for (; extent_IT  != extent.layers.end(); f_level++, r_level--, extent_IT++) {
         auto& _SL_      = *extent_IT;
         openslide_get_level_dimensions(openslide, r_level, &width, &height);
-        _SL_.xTiles      = U32_CAST(ceil(F32_CAST(width)/F32_CAST(TILE_PIX_LENGTH)));
-        _SL_.yTiles      = U32_CAST(ceil(F32_CAST(height)/F32_CAST(TILE_PIX_LENGTH)));
+        _SL_.xTiles      = U32_CAST(std::ceil(F32_CAST(width)/F32_CAST(TILE_PIX_LENGTH)));
+        _SL_.yTiles      = U32_CAST(std::ceil(F32_CAST(height)/F32_CAST(TILE_PIX_LENGTH)));
         _SL_.scale       =  width > height ?
         F32_CAST(width)/F32_CAST(extent.width) :
         F32_CAST(height)/F32_CAST(extent.height);
@@ -53,8 +54,8 @@ inline Buffer READ_OPENSLIDE_TILE (const EncoderSource src, LayerIndex __LI, Til
     auto x_tile_index   = static_cast<float>    (__TI % level_extent.xTiles);
     auto y_tile_index   = static_cast<float>    (__TI / level_extent.xTiles);
     openslide_read_region(os, static_cast<uint32_t*>(buffer->append(TILE_PIX_BYTES_RGBA)),
-                          static_cast<int64_t>  (round(x_tile_index * TILE_PIX_LENGTH * level_extent.downsample)),
-                          static_cast<int64_t>  (round(y_tile_index * TILE_PIX_LENGTH * level_extent.downsample)),
+                          static_cast<int64_t>  (std::round(x_tile_index * TILE_PIX_LENGTH * level_extent.downsample)),
+                          static_cast<int64_t>  (std::round(y_tile_index * TILE_PIX_LENGTH * level_extent.downsample)),
                           openSlideLevel,
                           TILE_PIX_LENGTH, TILE_PIX_LENGTH);
     
@@ -75,7 +76,7 @@ inline Buffer READ_SOURCE_TILE (const EncoderSource& src, LayerIndex layer, Tile
             return READ_OPENSLIDE_TILE (src, layer, tile);
             
         case EncoderSource::ENCODER_SRC_APERIO: throw std::runtime_error("APERIO TIFF reads not yet built; Use openslide for the moment");
-    }
+    } return Buffer();
 }
 inline EncoderSource OPEN_SOURCE (std::string& path, const Context context = NULL)
 {
@@ -199,7 +200,7 @@ Result interrupt_encoder(const Encoder & encoder) noexcept
             IRIS_FAILURE,
             e.what()
         };
-    }
+    } return IRIS_FAILURE;
 }
 Result get_encoder_progress (const Encoder &encoder, EncoderProgress &progress) noexcept
 {
