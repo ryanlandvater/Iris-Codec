@@ -185,6 +185,10 @@ if (IRIS_BUILD_SHARED OR IRIS_BUILD_PYTHON)
         IrisCodec
         PRIVATE ${IrisCodecDependencies}
     )
+    set_property(
+        TARGET IrisCodec 
+        PROPERTY POSITION_INDEPENDENT_CODE ON
+    )
     set(IrisCodecTargets ${IrisCodecTargets} IrisCodec)
 endif()
 
@@ -272,14 +276,15 @@ if(IRIS_BUILD_PYTHON)
         PRIVATE ${IFE_SOURCE_DIR}
         PRIVATE ${CODEC_SOURCE_DIR}
     )
+    set_property(
+        TARGET IrisCodecPython
+        PROPERTY OUTPUT_NAME Iris
+        PROPERTY POSITION_INDEPENDENT_CODE ON
+    )
     target_link_libraries (
         IrisCodecPython
         PRIVATE IrisHeaders
         PRIVATE ${IrisCodecDependencies}
-    )
-    set_property(
-        TARGET IrisCodecPython
-        PROPERTY OUTPUT_NAME Iris
     )
     install(
         TARGETS IrisCodecPython
@@ -297,14 +302,15 @@ if(IRIS_BUILD_PYTHON)
             PRIVATE ${IFE_SOURCE_DIR}
             PRIVATE ${CODEC_SOURCE_DIR}
         )
+        set_property(
+            TARGET IrisCodecEncoderPython
+            PROPERTY OUTPUT_NAME Encoder
+            PROPERTY POSITION_INDEPENDENT_CODE ON
+        )
         target_link_libraries (
             IrisCodecEncoderPython
             PRIVATE IrisHeaders
             PRIVATE ${IrisCodecDependencies}
-        )
-        set_property(
-            TARGET IrisCodecEncoderPython
-            PROPERTY OUTPUT_NAME Encoder
         )
         install(
             TARGETS IrisCodecEncoderPython
