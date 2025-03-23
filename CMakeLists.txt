@@ -12,6 +12,9 @@ option(IRIS_BUILD_STATIC "Build IrisCodec Static Library" ON)
 option(IRIS_BUILD_ENCODER "Build the IrisCodec Encoder executable" ON)
 option(IRIS_BUILD_PYTHON "Build IrisCodec Python modules" OFF)
 option(IRIS_BUILD_DEPENDENCIES "Build all dependencies and statically link into self-contained binary" OFF)
+if (IRIS_BUILD_SHARED OR IRIS_BUILD_PYTHON)
+    set (CMAKE_POSITION_INDEPENDENT_CODE ON)
+endif()
 
 function(get_codec_version)
     set(codec_priv_header "${CMAKE_CURRENT_SOURCE_DIR}/src/IrisCodecPriv.hpp")
@@ -185,10 +188,6 @@ if (IRIS_BUILD_SHARED OR IRIS_BUILD_PYTHON)
         IrisCodec
         PRIVATE ${IrisCodecDependencies}
     )
-    set_property(
-        TARGET IrisCodec 
-        PROPERTY POSITION_INDEPENDENT_CODE ON
-    )
     set(IrisCodecTargets ${IrisCodecTargets} IrisCodec)
 endif()
 
@@ -279,7 +278,6 @@ if(IRIS_BUILD_PYTHON)
     set_property(
         TARGET IrisCodecPython
         PROPERTY OUTPUT_NAME Iris
-        PROPERTY POSITION_INDEPENDENT_CODE ON
     )
     target_link_libraries (
         IrisCodecPython
@@ -305,7 +303,6 @@ if(IRIS_BUILD_PYTHON)
         set_property(
             TARGET IrisCodecEncoderPython
             PROPERTY OUTPUT_NAME Encoder
-            PROPERTY POSITION_INDEPENDENT_CODE ON
         )
         target_link_libraries (
             IrisCodecEncoderPython
