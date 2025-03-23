@@ -1,5 +1,5 @@
 /**
- * @file IrisCodecEncoder.cpp
+ * @file EncoderMain.cpp
  * @author Ryan Landvater
  * @brief 
  * @version 2025.1.0
@@ -13,13 +13,17 @@
  * @copyright Copyright (c) Ryan Landvater, 2025
  * 
  */
+#if _WIN32
+#include <io.h>
+#else
+#include <unistd.h>
+#include <sys/ioctl.h>
+#endif
 #include <thread>
 #include <iostream>
 #include <format>
 #include <iomanip>
-#include <sys/ioctl.h>
 #include <filesystem>
-#include <unistd.h>
 #include <set>
 #include "IrisCodecCore.hpp"
 constexpr char help_statement[] = 
@@ -126,9 +130,14 @@ int main(int argc, char const *argv[])
     if (out_path.size() != 0)
         if (std::filesystem::is_directory(out_path) == false)
             std::filesystem::create_directory(out_path);
-    
+    #if _WIN32
+    struct winsize {
+        ws_col = 20;
+    } console_dim;
+    #else
     winsize console_dim;
     ioctl(STDOUT_FILENO, TIOCGWINSZ, &console_dim);
+    #endif
     
     // Create the encoder object for this particular file
     IrisCodec::EncodeSlideInfo slide_encode_info {

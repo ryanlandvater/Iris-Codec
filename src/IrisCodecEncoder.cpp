@@ -7,7 +7,6 @@
 #include <filesystem>
 #include <openslide/openslide.h>
 #include "IrisCodecPriv.hpp"
-//#include "IrisCoreGraphics.hpp"
 
 namespace IrisCodec {
 inline void SET_SLIDE_EXTENT_OPENSLIDE (EncoderSource& src)
@@ -646,7 +645,7 @@ Result __INTERNAL__Encoder::dispatch_encoder()
     std::filesystem::path dst_dir;
     std::filesystem::path dst_file_path;
     if (_dstPath.length() == 0)
-        _dstPath = source_dir;
+        _dstPath = source_dir.string();
     if (std::filesystem::is_directory(_dstPath) == false)
         throw std::runtime_error("Invalid encoder destination directory path "+_dstPath);
     #if _WIN32

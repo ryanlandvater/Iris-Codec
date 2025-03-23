@@ -24,7 +24,7 @@ Result  resize_file         (const File&, const struct FileResizeInfo&);
 
 struct FileCreateInfo {
     std::string     filePath;
-    size_t          initial_size = 5E6;
+    size_t          initial_size = static_cast<size_t>(5E6);
 };
 struct FileOpenInfo {
     std::string     filePath;
