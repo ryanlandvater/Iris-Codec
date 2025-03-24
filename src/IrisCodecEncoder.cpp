@@ -339,7 +339,7 @@ Result __INTERNAL__Encoder::get_encoder_progress (EncoderProgress &progress) con
         case ENCODER_INACTIVE:
         case ENCODER_SHUTDOWN:
             return IRIS_SUCCESS;
-    }
+    }   return IRIS_FAILURE;
 }
 // MARK: Setters
 void __INTERNAL__Encoder::set_src_path(const std::string &source)
@@ -788,6 +788,6 @@ Result __INTERNAL__Encoder::interrupt_encoder()
         case ENCODER_INACTIVE:
         case ENCODER_SHUTDOWN:
             return IRIS_SUCCESS;
-    }
+    }   return IRIS_FAILURE;
 }
 } // END IRIS CODEC NAMESPACE
