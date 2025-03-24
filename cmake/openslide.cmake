@@ -2,7 +2,7 @@ include(FindPkgConfig)
 pkg_check_modules(OPENSLIDE openslide)
 if (OPENSLIDE_FOUND)
     # Best case: .pc loaded and gives up the package vars
-    set (OPENSLIDE_LIB ${OPENSLIDE_LIBRARIES})
+    find_library (OPENSLIDE_LIB openslide PATHS  ${OPENSLIDE_LIBDIR})
     set (OPENSLIDE_DIR ${OPENSLIDE_INCLUDE_DIRS})
 else ()
     # Maybe the pc didn't work but we can try to just find the files
