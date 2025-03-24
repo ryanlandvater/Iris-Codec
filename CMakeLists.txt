@@ -264,7 +264,7 @@ if(IRIS_BUILD_PYTHON)
     )
     if (NOT CMAKE_INSTALL_PYTHON_LIBDIR)
         set(CMAKE_INSTALL_PYTHON_LIBDIR
-        "${CMAKE_INSTALL_LIBDIR}/python${major}.${minor}/site-packages")
+        "${CMAKE_INSTALL_LIBDIR}/python${Python_VERSION_MAJOR}.${Python_VERSION_MINOR}/site-packages")
     endif ()
     message(STATUS "Installing python modules at: ${CMAKE_INSTALL_PYTHON_LIBDIR}")
     pybind11_add_module(
