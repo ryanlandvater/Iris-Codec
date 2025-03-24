@@ -7,6 +7,10 @@
 
 #ifndef IrisCodecPrivTypes_h
 #define IrisCodecPrivTypes_h
+extern "C" {
+typedef struct tiff         TIFF;
+typedef struct _openslide   openslide_t;
+}
 namespace IrisCodec {
 using File = std::shared_ptr<struct __INTERNAL__File>;
 
@@ -62,10 +66,6 @@ struct TileTracker {
     std::atomic<__tileStatus>   status;
     TileTracker() : status(TILE_PENDING) {}
 };
-extern "C" {
-typedef struct tiff         TIFF;
-typedef struct _openslide   openslide_t;
-}
 struct EncoderSource {
     enum {
         ENCODER_SRC_UNDEFINED   = 0,

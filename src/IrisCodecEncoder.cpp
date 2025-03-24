@@ -6,10 +6,14 @@
 //
 #include <cmath>
 #include <filesystem>
-#include <openslide/openslide.h>
 #include "IrisCodecPriv.hpp"
 
+#if IRIS_INCLUDE_OPENSLIDE
+#include <openslide/openslide.h>
+#endif
+
 namespace IrisCodec {
+#if IRIS_INCLUDE_OPENSLIDE
 inline void SET_SLIDE_EXTENT_OPENSLIDE (EncoderSource& src)
 {
     openslide_t*    openslide = src.openslide;
@@ -61,6 +65,7 @@ inline Buffer READ_OPENSLIDE_TILE (const EncoderSource src, LayerIndex __LI, Til
     
     return buffer;
 }
+#endif
 inline Buffer READ_SOURCE_TILE (const EncoderSource& src, LayerIndex layer, TileIndex tile)
 {
     switch (src.sourceType) {
@@ -73,7 +78,11 @@ inline Buffer READ_SOURCE_TILE (const EncoderSource& src, LayerIndex layer, Tile
                 .tileIndex  = tile
         });
         case EncoderSource::ENCODER_SRC_OPENSLIDE:
+            #if IRIS_INCLUDE_OPENSLIDE
             return READ_OPENSLIDE_TILE (src, layer, tile);
+            #else
+            throw std::runtime_error("Openslide linkage was NOT compiled into this binary. Request a new version of Iris Codec with OpenSlide support if you would like to decode slide scanning vendor slide files only accessable to OpenSlide.");
+            #endif
             
         case EncoderSource::ENCODER_SRC_APERIO: throw std::runtime_error("APERIO TIFF reads not yet built; Use openslide for the moment");
     } return Buffer();
@@ -98,6 +107,7 @@ inline EncoderSource OPEN_SOURCE (std::string& path, const Context context = NUL
             
         return source;
     }
+    #if IRIS_INCLUDE_OPENSLIDE
     if (openslide_detect_vendor(path.c_str())) {
         source.sourceType   = EncoderSource::ENCODER_SRC_OPENSLIDE;
         source.openslide    = openslide_open(path.c_str());
@@ -109,6 +119,7 @@ inline EncoderSource OPEN_SOURCE (std::string& path, const Context context = NUL
         
         return source;
     }
+    #endif
     return source;
 }
 inline std::string to_string (EncoderStatus status)
