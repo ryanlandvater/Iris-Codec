@@ -262,7 +262,11 @@ if(IRIS_BUILD_PYTHON)
     FetchContent_MakeAvailable (
         Pybind11
     )
-    set(IRIS_PYTHON_INSTALL_DIR ${CMAKE_INSTALL_LIBDIR}/python${Python_VERSION_MAJOR}.${Python_VERSION_MINOR}/site-packages)
+    if (NOT CMAKE_INSTALL_PYTHON_LIBDIR)
+        set(CMAKE_INSTALL_PYTHON_LIBDIR
+        "${CMAKE_INSTALL_LIBDIR}/python${major}.${minor}/site-packages")
+    endif ()
+    message(STATUS "Installing python modules at: ${CMAKE_INSTALL_PYTHON_LIBDIR}")
     pybind11_add_module(
         IrisCodecPython
         $<TARGET_OBJECTS:IrisCodecLib>
@@ -285,7 +289,7 @@ if(IRIS_BUILD_PYTHON)
     )
     install(
         TARGETS IrisCodecPython
-        DESTINATION ${IRIS_PYTHON_INSTALL_DIR}/Iris
+        DESTINATION ${CMAKE_INSTALL_PYTHON_LIBDIR}/Iris
     )
     if (IRIS_BUILD_ENCODER)
         pybind11_add_module(
@@ -310,13 +314,13 @@ if(IRIS_BUILD_PYTHON)
         )
         install(
             TARGETS IrisCodecEncoderPython
-            DESTINATION ${IRIS_PYTHON_INSTALL_DIR}/Iris/Encoder
+            DESTINATION ${CMAKE_INSTALL_PYTHON_LIBDIR}/Iris/Encoder
         )
     endif()
     
     install(
         DIRECTORY ${PROJECT_SOURCE_DIR}/python/Iris 
-        DESTINATION ${IRIS_PYTHON_INSTALL_DIR}/
+        DESTINATION ${CMAKE_INSTALL_PYTHON_LIBDIR}/
     )
         
 endif()
