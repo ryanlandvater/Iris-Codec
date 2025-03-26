@@ -35,11 +35,7 @@
 #define F64_CAST(X)         static_cast<double>(X)
 #endif
 #ifndef IRIS_INCLUDE_OPENSLIDE
-#if _WIN32
-#define IRIS_INCLUDE_OPENSLIDE 0
-#else
 #define IRIS_INCLUDE_OPENSLIDE 1
-#endif
 #endif
 #include <iostream>
 #include "IrisCore.hpp"

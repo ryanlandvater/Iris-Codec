@@ -7,11 +7,14 @@ include(ExternalProject)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
 option(IRIS_BUILD_SHARED "Build IrisCodec Shared Library" ON)
 option(IRIS_BUILD_STATIC "Build IrisCodec Static Library" ON)
 option(IRIS_BUILD_ENCODER "Build the IrisCodec Encoder executable" ON)
 option(IRIS_BUILD_PYTHON "Build IrisCodec Python modules" OFF)
 option(IRIS_BUILD_DEPENDENCIES "Build all dependencies and statically link into self-contained binary" OFF)
+option(IRIS_USE_OPENSLIDE "Use openslide in the encoder (currently not supported on Windows Arm64)" ON)
+
 if (IRIS_BUILD_SHARED OR IRIS_BUILD_PYTHON)
     set (CMAKE_POSITION_INDEPENDENT_CODE ON)
 endif()
@@ -144,12 +147,17 @@ set (
     ${AVIF_LIBRARY}
 )
 if (IRIS_BUILD_ENCODER)
-    message(STATUS "BUILDING IRIS CODEC ENCODER: Encoding from vendor files requires Openslide")
-    include(./cmake/openslide.cmake)
-    message(STATUS "Found OPENSLIDE_LIB: ${OPENSLIDE_LIB}")
     set(IrisCodecSources ${IrisCodecSources} ${CODEC_SOURCE_DIR}/IrisCodecEncoder.cpp)
-    set(IrisCodecInclude ${IrisCodecInclude} ${OPENSLIDE_DIR})
-    set(IrisCodecDependencies ${IrisCodecDependencies} ${OPENSLIDE_LIB})
+    if (IRIS_USE_OPENSLIDE)
+        add_compile_definitions(IRIS_INCLUDE_OPENSLIDE=1)
+        message(STATUS "BUILDING IRIS CODEC ENCODER: Encoding from vendor files requires Openslide")
+        include(./cmake/openslide.cmake)
+        message(STATUS "Found OPENSLIDE_LIB: ${OPENSLIDE_LIB}")
+        set(IrisCodecInclude ${IrisCodecInclude} ${OPENSLIDE_DIR})
+        set(IrisCodecDependencies ${IrisCodecDependencies} ${OPENSLIDE_LIB})
+    else ()
+        add_compile_definitions(IRIS_INCLUDE_OPENSLIDE=0)
+    endif()
 endif(IRIS_BUILD_ENCODER)
 
 add_library(
@@ -324,14 +332,3 @@ if(IRIS_BUILD_PYTHON)
     )
         
 endif()
-
-#Debug print variables
-# get_cmake_property(_variableNames VARIABLES)
-# list (SORT _variableNames)
-# foreach (_variableName ${_variableNames})
-#     message(STATUS "${_variableName}=${${_variableName}}")
-# endforeach()
-# CMAKE_SHARED_LIBRARY_PREFIX
-# CMAKE_SHARED_LIBRARY_SUFFIX
-# CMAKE_STATIC_LIBRARY_PREFIX
-# CMAKE_STATIC_LIBRARY_SUFFIX
