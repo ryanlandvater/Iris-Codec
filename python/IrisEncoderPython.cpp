@@ -10,8 +10,6 @@
 #include <pybind11/numpy.h>
 namespace py    = pybind11;
 
-#include <iomanip>
-#include <sys/ioctl.h>
 #include "IrisTypesPython.hpp"
 #include "IrisCodecPython.hpp"
 namespace IrisCodec {

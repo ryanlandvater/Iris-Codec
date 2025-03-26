@@ -14,6 +14,8 @@
  * 
  */
 #if _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
 #include <io.h>
 #else
 #include <unistd.h>
@@ -131,10 +133,15 @@ int main(int argc, char const *argv[])
     if (out_path.size() != 0)
         if (std::filesystem::is_directory(out_path) == false)
             std::filesystem::create_directory(out_path);
+            
     #if _WIN32
     struct winsize {
-        ws_col = 20;
+        int ws_col; 
     } console_dim;
+    CONSOLE_SCREEN_BUFFER_INFO csbi;
+    GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi);
+    int width = csbi.srWindow.Right - csbi.srWindow.Left + 1;
+    console_dim.ws_col = csbi.srWindow.Right - csbi.srWindow.Left + 1;
     #else
     winsize console_dim;
     ioctl(STDOUT_FILENO, TIOCGWINSZ, &console_dim);
