@@ -49,12 +49,128 @@ conda install - c conda-forge Iris-Codec
 
 ## Implementations
 ### C++
-```cpp
-#import <Iris/IrisCodec.hpp>
+Iris is natively a C++ program and the majority of features will first be supported in C++ followed by the other language bindings as we find time to write the bindings. 
 
+Begin by importing the [Iris Codec Core header](https://github.com/IrisDigitalPathology/Iris-Headers/blob/main/include/IrisCodecCore.hpp); it contains references to the [Iris Codec specific type definitions](https://github.com/IrisDigitalPathology/Iris-Headers/blob/main/include/IrisCodecTypes.hpp) as well as the general [Iris Core type definitions](https://github.com/IrisDigitalPathology/Iris-Headers/blob/main/include/IrisTypes.hpp). You may chose to perform your own file system validations and recovery routines. Iris will, however catch all of these as the main API methods are declared `noexcept`. Should an runtime error occur, it will be reported in the form of an `IrisResult` message, as seen in the `IrisResult validate_slide (const SlideOpenInfo&) noexcept;` call below. Successful loading of a slide file will return a valid `IrisCodec::Slide` object; failure will return a `nullptr`. 
+```cpp
+// Import the Iris Codec header
+// This import includes the types header automatically
+#import <filesystem>
+#import <Iris/IrisCodecCore.hpp>
+int main(int argc, char const *argv[])
+{
+    using namespace IrisCodec;
+    std::filesystem::path file_path = "path/to/slide_file.iris";
+
+    // You can check the file system to see if the slide exists
+    // If you choose not to, that's fine too. Iris will tell you.
+    if (!std::filesystem::exists(file_path)) {
+        printf(file_path.string() + " file does not exist\n");
+        return EXIT_FAILURE;
+    }
+
+    // You can quickly check if the header starts with Iris
+    // file extension signatures. If not, that's fine too.
+    // Iris will catch it during validation.
+    if (!is_iris_codec_file(file_path.string())) {
+        printf(file_path.string() + " is not a valid Iris slide file\n");
+        return EXIT_FAILURE;
+    }
+
+    // Create an open slide info struct. Ignore the other
+    // parameters at the moment; they will default.
+    SlideOpenInfo open_info {
+        .filePath = file_path.string();
+    };
+    // Perform a deep validation of the slide file structure
+    // This will navigate the internal offset-chain and
+    // check for violations of the IFE standard.
+    IrisResult result = validate_slide (open_info);
+    if (result != IRIS_SUCCESS) {
+        printf (result.message);
+        return EXIT_FAILURE;
+    }
+    
+    // Finally create the slide object.
+    // Most Iris objects are shared_ptrs,
+    // so Iris will handle the memory clean-up
+    auto slide = open_slide (open_info);
+    if (slide) return EXIT_SUCCESS;
+    else return EXIT_FAILURE;
+}
 ```
+
+Once opened, the slide `IrisCodec::SlideInfo` structure can be loaded using the `Result get_slide_info (const Slide&, SlideInfo&) noexcept` call and used as an initialized structure containing all the information needed to navigate the slide file and read elements.
+```cpp
+// Read the slide information
+SlideInfo info;
+IrisResult result = get_slide_info (slide, info);
+if (result != IRIS_SUCCESS) {
+    printf (result.message);
+    return EXIT_FAILURE;
+}
+
+// Slide tile read info provides a simple mechanism
+// for reading slide data.
+struct SlideTileReadInfo read_info {
+    .slide                  = slide,
+    .layer                  = 0,
+    .optionalDestination    = NULL, /*wrapper can go here*/
+    .desiredFormat          = Iris::FORMAT_R8G8B8A8,
+};
+// Iterate
+for (auto& layer : info.extent.layers) {
+    for (int y_index = 0; y_index < layer.yTiles; ++y_index) {
+        for (int x_index = 0; x_index < layer.xTiles; ++x_index) {
+            // Read the tile slide tile
+            auto rgba = read_slide_tile (read_info);
+            // Do something with the tile pixel values
+            // Do not worry about clean up; the slide
+            // pixel values are in a Iris::Buffer shared_ptr
+        }
+    }
+    read_info.layer++;
+}
+if (optional_buffer) free (optional_buffer);
+```
+Decompressed slide data can be optionally read into preallocated memory. If the optional destination buffer is insufficiently sized, Iris will instead allocate a new buffer and return that new buffer with the pixel data. The `Iris::Buffer` should weakly reference the underlying memory as strongly referenced `Iris::Buffer` objects free underlying memory on deletion.
+```cpp
+char* some_GPU_upload_buffer;
+size_t tile_byte_offset;
+char* destination = some_GPU_upload_buffer + tile_byte_offest;
+size_t tile_bytes = 256*256*4;
+Iris::Buffer wrapper = Wrap_weak_buffer_fom_data (destination, tile_bytes);
+struct SlideTileReadInfo read_info {
+    .slide                  = slide,
+    .optionalDestination    = NULL, /*wrapper can go here*/
+    .desiredFormat          = Iris::FORMAT_R8G8B8A8,
+};
+Buffer result = read_slide_tile (read_info);
+if (weak_wrapper != result) {
+    printf ("Insufficient sized buffer provided");
+}
+```
+
+
 ### Python
 ```python
-from Iris import Codec as codec
+#Import the Iris Codec Module
+from Iris import Codec as ic
+
+# Perform a deep validation of the slide file structure
+# This will navigate the internal offset-chain and
+# check for violations of the IFE standard.
+result = Codec.validate_slide_path(slide_path)
+if (result.success() == False):
+    raise Exception(f'Invalid slide file path: {result.message()}')
+
+# Open a slide file
+slide = ic.open_slide('path/to/slide_file.iris')
+
+# The following conditional will return True
+# as the slide has already passed validation;
+# We simply include it as an example of how to check the slide
+if (not slide):
+    raise Exception(f'Invalid slide file path: {result.message()}')
 
 ```
