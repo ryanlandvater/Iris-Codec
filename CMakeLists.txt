@@ -7,17 +7,8 @@ include(ExternalProject)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
-option(IRIS_BUILD_SHARED "Build IrisCodec Shared Library" ON)
-option(IRIS_BUILD_STATIC "Build IrisCodec Static Library" ON)
-option(IRIS_BUILD_ENCODER "Build the IrisCodec Encoder executable" ON)
-option(IRIS_BUILD_PYTHON "Build IrisCodec Python modules" OFF)
-option(IRIS_BUILD_DEPENDENCIES "Build all dependencies and statically link into self-contained binary" OFF)
-option(IRIS_USE_OPENSLIDE "Use openslide in the encoder (currently not supported on Windows Arm64)" ON)
-
-if (IRIS_BUILD_SHARED OR IRIS_BUILD_PYTHON)
-    set (CMAKE_POSITION_INDEPENDENT_CODE ON)
-endif()
+set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)
+set (CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 function(get_codec_version)
     set(codec_priv_header "${CMAKE_CURRENT_SOURCE_DIR}/src/IrisCodecPriv.hpp")
@@ -57,13 +48,42 @@ if (IRIS_BUILD_PYTHON)
     message(STATUS "Iris Codec is configured to build Python Module")
 endif()
 
+FetchContent_Declare (
+    VulkanHeaders
+    URL https://github.com/KhronosGroup/Vulkan-Headers/archive/refs/tags/vulkan-sdk-1.4.309.0.tar.gz
+)
+FetchContent_Declare (
+    VkMemoryAllocator
+    URL https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator/archive/refs/tags/v3.2.1.tar.gz
+    URL_HASH SHA256=5e7749504cb802427ffb7bec38a0b6a15db46ae253f00560acb3e624d9fe695c
+)
+set(GLM_BUILD_LIBRARY OFF)
+set(GLM_BUILD_INSTALL OFF)
+set(GLM_BUILD_TESTS   OFF)
+FetchContent_Declare (
+    GLM
+    URL https://github.com/g-truc/glm/archive/refs/tags/1.0.1.tar.gz
+    URL_HASH SHA256=9f3174561fd26904b23f0db5e560971cbf9b3cbda0b280f04d5c379d03bf234c
+)
+FetchContent_MakeAvailable(
+    VulkanHeaders 
+    VkMemoryAllocator
+    GLM
+)
 
-
-PROJECT(
+PROJECT (
     IrisCodec
     LANGUAGES CXX
     VERSION ${VERSION_STRING}
 )
+
+option(IRIS_BUILD_SHARED "Build IrisCodec Shared Library" ON)
+option(IRIS_BUILD_STATIC "Build IrisCodec Static Library" ON)
+option(IRIS_BUILD_ENCODER "Build the IrisCodec Encoder executable" ON)
+option(IRIS_BUILD_PYTHON "Build IrisCodec Python modules" OFF)
+option(IRIS_BUILD_DEPENDENCIES "Build all dependencies and statically link into self-contained binary" OFF)
+option(IRIS_USE_OPENSLIDE "Use openslide in the encoder (currently not supported on Windows Arm64)" ON)
+
 
 FetchContent_Declare (
     IrisHeaders
@@ -72,47 +92,19 @@ FetchContent_Declare (
     GIT_SHALLOW ON
     FETCHCONTENT_UPDATES_DISCONNECTED ON
 )
+# Do not export the IFE API. 
+add_compile_definitions(IFE_EXPORT_API=false)
 FetchContent_Declare (
-    VulkanHeaders
-    GIT_REPOSITORY https://github.com/KhronosGroup/Vulkan-Headers.git
-    GIT_TAG "cacef30"    #"origin/main"
-    GIT_SHALLOW ON
-    FIND_PACKAGE_ARGS NAMES Vulkan
-    FETCHCONTENT_UPDATES_DISCONNECTED ON
-)
-FetchContent_Declare (
-    VkMemoryAllocator
-    GIT_REPOSITORY https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator.git
-    GIT_TAG "c788c52" #"origin/master"
-    GIT_SHALLOW ON
-    FETCHCONTENT_UPDATES_DISCONNECTED ON
-)
-FetchContent_Populate (
-    GLM
-    GIT_REPOSITORY https://github.com/g-truc/glm.git
-    GIT_TAG "2d4c4b4" #"origin/master"
-    GIT_SHALLOW ON
-    FETCHCONTENT_UPDATES_DISCONNECTED ON
-    FETCHCONTENT_QUIET ON
-    SOURCE_DIR ${CMAKE_CURRENT_BINARY_DIR}/_deps/glm-src
-    SUBBUILD_DIR ${CMAKE_CURRENT_BINARY_DIR}/_deps/glm-subbuild
-    BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR}/_deps/glm-build
-)
-FetchContent_Populate (
     IrisFileExtension
     GIT_REPOSITORY https://github.com/IrisDigitalPathology/Iris-File-Extension.git
     GIT_TAG "origin/main"
     GIT_SHALLOW ON
     FETCHCONTENT_UPDATES_DISCONNECTED ON
     FETCHCONTENT_QUIET ON
-    SOURCE_DIR ${CMAKE_CURRENT_BINARY_DIR}/_deps/irisfileextension-src
-    SUBBUILD_DIR ${CMAKE_CURRENT_BINARY_DIR}/_deps/irisfileextension-subbuild
-    BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR}/_deps/irisfileextension-build
 )
 FetchContent_MakeAvailable(
-    IrisHeaders 
-    VulkanHeaders 
-    VkMemoryAllocator
+    IrisHeaders
+    IrisFileExtension
 )
 
 # Include external projects, if needed
@@ -126,7 +118,6 @@ set(IFE_SOURCE_DIR ${irisfileextension_SOURCE_DIR}/src)
 set(CODEC_SOURCE_DIR ${PROJECT_SOURCE_DIR}/src)
 set (
     IrisCodecSources
-    ${IFE_SOURCE_DIR}/IrisCodecExtension.cpp
     ${CODEC_SOURCE_DIR}/IrisCodecContext.cpp
     ${CODEC_SOURCE_DIR}/IrisCodecFile.cpp
     ${CODEC_SOURCE_DIR}/IrisCodecCache.cpp
@@ -143,6 +134,7 @@ set (
 )
 set (
     IrisCodecDependencies
+    IrisFileExtensionStatic
     ${TURBOJPEG_LIBRARY}
     ${AVIF_LIBRARY}
 )
@@ -167,6 +159,10 @@ add_library(
 target_include_directories (
     IrisCodecLib PRIVATE
     ${IrisCodecInclude}
+)
+set_target_properties(
+    IrisCodecLib 
+    PROPERTIES CXX_VISIBILITY_PRESET hidden
 )
 target_link_libraries (
     IrisCodecLib
@@ -242,7 +238,7 @@ if (${PROJECT_IS_TOP_LEVEL})
         DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/Iris
     )
     install(
-        TARGETS ${IrisCodecTargets}
+        TARGETS ${IrisCodecTargets} IrisFileExtensionStatic
         EXPORT IrisCodecConfig
         FILE_SET HEADERS DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/Iris
     )
