@@ -51,14 +51,46 @@ py::array_t<uint8_t> _read_slide_tile (const Slide& __sl, const unsigned __li, c
     auto shape  = std::vector<size_t>{TILE_PIX_LENGTH,TILE_PIX_LENGTH,4};
     auto array  = py::array_t<uint8_t>(shape);
     auto buffer = Iris::Wrap_weak_buffer_fom_data(array.data(0), array.size());
-    buffer = read_slide_tile( SlideTileReadInfo {
-        .slide      = __sl,
-        .layerIndex = __li,
-        .tileIndex  = __ti,
-        .optionalDestination = buffer
+    auto pixels = read_slide_tile( SlideTileReadInfo {
+        .slide                  = __sl,
+        .layerIndex             = __li,
+        .tileIndex              = __ti,
+        .optionalDestination    = buffer
     });
-    if (!buffer)
+    if (buffer != pixels) {
+        printf("Failed to read slide pixel values into destination buffer; buffer was insuffiently sized");
         return py::array_t<uint8_t>();
+    }
+    return array;
+}
+py::array_t<uint8_t> _read_slide_tile_coords (const Slide& __sl, const unsigned __li, const unsigned __xi, const unsigned __yi)
+{
+    auto shape  = std::vector<size_t>{TILE_PIX_LENGTH,TILE_PIX_LENGTH,4};
+    auto array  = py::array_t<uint8_t>(shape);
+    auto buffer = Iris::Wrap_weak_buffer_fom_data(array.data(0), array.size());
+    auto extent = __sl->get_slide_info().extent;
+    if (__li >= extent.layers.size()) { printf
+        ("read_slide_tile error: layer index (%u) out of bounds", __li);
+        return array;
+    }
+    auto& layer = extent.layers[__li];
+    if (__xi >= layer.xTiles || __yi >= layer.yTiles) {printf
+        ("read_slide_tile error: tile index (%u, %u) out of layer bounds (%u,%u)",
+         __xi, __yi, layer.xTiles, layer.yTiles);
+        return array;
+    }
+    
+    auto __ti = __yi * layer.xTiles + __xi;
+    auto pixels = read_slide_tile( SlideTileReadInfo {
+        .slide                  = __sl,
+        .layerIndex             = __li,
+        .tileIndex              = __ti,
+        .optionalDestination    = buffer
+    });
+    if (buffer != pixels) {
+        printf("Failed to read slide pixel values into destination buffer; buffer was insuffiently sized");
+        return py::array_t<uint8_t>();
+    }
     return array;
 }
 py::array_t<uint8_t> _read_slide_tile_channels (const Slide& __sl, const unsigned __li, const unsigned __ti)
@@ -67,6 +99,7 @@ py::array_t<uint8_t> _read_slide_tile_channels (const Slide& __sl, const unsigne
         .slide      = __sl,
         .layerIndex = __li,
         .tileIndex  = __ti,
+        
     });
     if (!buffer) return py::array_t<uint8_t>();
     std::vector<size_t> array_shape {3,TILE_PIX_LENGTH,TILE_PIX_LENGTH};
@@ -126,11 +159,15 @@ static inline void DEFINE_IRIS_CODEC_SUBMODULE (pybind11::module_& base)
         .def("get_info", &_get_info)
         .def("read_slide_tile", &_read_slide_tile,
              py::arg("layer_index") = 0,
-             py::arg("tile_index") = 0)
+             py::arg("tile_index")  = 0)
+        .def("read_slide_tile", &_read_slide_tile_coords,
+             py::arg("layer_index") = 0,
+             py::arg("x_tile_index")= 0,
+             py::arg("y_tile_index")= 0)
         .def("read_slide_tile_channels", &_read_slide_tile_channels,
              "Returns slide tile pixel data in the form of a [4,256,256] numpy array with each major",
              py::arg("layer_index") = 0,
-             py::arg("tile_index") = 0)
+             py::arg("tile_index")  = 0)
         .doc() = "Iris Codec Slide (distinct from Iris Core Slide, loader class) is a light-weight wrapper around a whole slide image file used to access slide information and raw image data";
     
     // FUNCTION DEFINITIONS

@@ -164,7 +164,7 @@ slide_path = 'path/to/slide_file.iris'
 result = Codec.validate_slide_path(slide_path)
 if (result.success() == False):
     raise Exception(f'Invalid slide file path: {result.message()}')
-print(f"Slide file {slide_path} successfully passed validation")
+print(f"Slide file '{slide_path}' successfully passed validation")
 
 # Open a slide file
 slide = Codec.open_slide(slide_path)
