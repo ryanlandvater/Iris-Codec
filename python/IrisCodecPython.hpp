@@ -55,7 +55,8 @@ py::array_t<uint8_t> _read_slide_tile (const Slide& __sl, const unsigned __li, c
         .slide                  = __sl,
         .layerIndex             = __li,
         .tileIndex              = __ti,
-        .optionalDestination    = buffer
+        .optionalDestination    = buffer,
+        .desiredFormat          = Iris::FORMAT_R8G8B8A8
     });
     if (buffer != pixels) {
         printf("Failed to read slide pixel values into destination buffer; buffer was insuffiently sized");
@@ -85,7 +86,8 @@ py::array_t<uint8_t> _read_slide_tile_coords (const Slide& __sl, const unsigned 
         .slide                  = __sl,
         .layerIndex             = __li,
         .tileIndex              = __ti,
-        .optionalDestination    = buffer
+        .optionalDestination    = buffer,
+        .desiredFormat          = Iris::FORMAT_R8G8B8A8
     });
     if (buffer != pixels) {
         printf("Failed to read slide pixel values into destination buffer; buffer was insuffiently sized");
@@ -96,10 +98,10 @@ py::array_t<uint8_t> _read_slide_tile_coords (const Slide& __sl, const unsigned 
 py::array_t<uint8_t> _read_slide_tile_channels (const Slide& __sl, const unsigned __li, const unsigned __ti)
 {
     auto buffer = read_slide_tile( SlideTileReadInfo {
-        .slide      = __sl,
-        .layerIndex = __li,
-        .tileIndex  = __ti,
-        
+        .slide          = __sl,
+        .layerIndex     = __li,
+        .tileIndex      = __ti,
+        .desiredFormat  = FORMAT_R8G8B8A8
     });
     if (!buffer) return py::array_t<uint8_t>();
     std::vector<size_t> array_shape {3,TILE_PIX_LENGTH,TILE_PIX_LENGTH};

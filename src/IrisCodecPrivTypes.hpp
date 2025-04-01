@@ -12,7 +12,8 @@ typedef struct tiff         TIFF;
 typedef struct _openslide   openslide_t;
 }
 namespace IrisCodec {
-using File = std::shared_ptr<struct __INTERNAL__File>;
+using       Tile            = std::shared_ptr<class __INTERNAL__Tile>;
+using       File            = std::shared_ptr<class __INTERNAL__File>;
 
 /// Create a new file for writing
 File    create_file         (const struct FileCreateInfo&);
@@ -73,6 +74,7 @@ struct EncoderSource {
         ENCODER_SRC_OPENSLIDE,
         ENCODER_SRC_APERIO,
     }               sourceType  = ENCODER_SRC_UNDEFINED;
+    Format          format      = Iris::FORMAT_UNDEFINED;
     Extent          extent;
     Slide           irisSlide   = NULL;
     openslide_t*    openslide   = NULL;
