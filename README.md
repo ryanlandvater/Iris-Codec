@@ -155,7 +155,8 @@ if (weak_wrapper != result) {
 ### Python
 ```python
 #Import the Iris Codec Module
-from Iris import Codec as ic
+from Iris import Codec
+slide_path = 'path/to/slide_file.iris'
 
 # Perform a deep validation of the slide file structure
 # This will navigate the internal offset-chain and
@@ -163,14 +164,37 @@ from Iris import Codec as ic
 result = Codec.validate_slide_path(slide_path)
 if (result.success() == False):
     raise Exception(f'Invalid slide file path: {result.message()}')
+print(f"Slide file {slide_path} successfully passed validation")
 
 # Open a slide file
-slide = ic.open_slide('path/to/slide_file.iris')
+slide = Codec.open_slide(slide_path)
 
-# The following conditional will return True
+# The following conditional will return True in this instance
 # as the slide has already passed validation;
 # We simply include it as an example of how to check the slide
 if (not slide):
     raise Exception(f'Invalid slide file path: {result.message()}')
+
+# Get the slide abstraction
+result, info = slide.get_info()
+if (result.success() == False):
+    raise Exception(f'Failed to read slide information: {result.message()}')
+
+# Print the slide extent to the console
+extent = info.extent
+print(f"Slide file {extent.width} px by {extent.height}px with an encoding of {info.encoding}. The layer extents are as follows:")
+print(f'There are {len(extent.layers)} layers comprising the following dimensions:')
+for i, layer in enumerate(extent.layers):
+    print(f' Layer {i}: {layer.x_tiles} x-tiles, {layer.y_tiles} y-tiles, {layer.scale:0.0f}x scale')
+
+# Generate a quick view of a slide tile in the middle of the slide using matplotlib imshow function
+import matplotlib.pyplot as plt
+layer_index = 0
+x_index = int(extent.layers[layer_index].x_tiles/2)
+y_index = int(extent.layers[layer_index].y_tiles/2)
+tile_index = extent.layers[layer_index].x_tiles * y_index + x_index
+fig = plt.figure()
+plt.imshow(slide.read_slide_tile(layer_index,tile_index), interpolation='none')
+plt.show()
 
 ```
