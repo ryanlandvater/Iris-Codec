@@ -160,6 +160,10 @@ target_include_directories (
     IrisCodecLib PRIVATE
     ${IrisCodecInclude}
 )
+target_compile_definitions (
+    IrisCodecLib
+    PRIVATE IRIS_EXPORT_API=true 
+)
 set_target_properties(
     IrisCodecLib 
     PROPERTIES CXX_VISIBILITY_PRESET hidden

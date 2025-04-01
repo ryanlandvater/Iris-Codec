@@ -41,7 +41,7 @@ represents the previous file name (ex /path/to/slide.svs will be named /outdir/s
 -sm --strip_metadata: Strip patient identifiers from the encoded metadata within the slide file \
 -e --encoding: JPEG or AVIF (default JPEG)\
 \n";
-constexpr std::u8string complt_char = u8"█";
+const std::u8string complt_char = u8"█";
 enum ArgumentFlag : uint32_t {
     ARG_HELP    = 0,
     ARG_SOURCE,
