@@ -250,9 +250,9 @@ Buffer __INTERNAL__Slide::read_slide_tile(const SlideTileReadInfo &info) const
         .desiredFormat          = info.desiredFormat,
         .encoding               = ttable.encoding,
     });
-    
     if (!dst_buffer) throw std::runtime_error
         ("Failed to decompress slide tile");
+    
     return dst_buffer;
 }
 Iris::Result __INTERNAL__Slide::write_slide_annotation(const IrisCodec::Annotation &annotation)
