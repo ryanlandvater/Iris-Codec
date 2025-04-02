@@ -119,7 +119,7 @@ inline EncoderSource OPEN_SOURCE (std::string& path, const Context context = NUL
             ("No valid openslide handle returned from openslide_open");
 
         source.extent       = SET_SLIDE_EXTENT_OPENSLIDE(source.openslide);
-        source.format       = FORMAT_B8G8R8A8; // OpenSlide always reads as such
+        source.format       = FORMAT_R8G8B8A8; // OpenSlide always reads RGBA
         
         return source;
     }

@@ -98,7 +98,6 @@ PYBIND11_MODULE(Encoder, m)
                         << "\n\tSource file: " << encoder->get_src_path()
                         << "\n\tDestination: " << (encoder->get_dst_path().size()?encoder->get_dst_path():"{Source Dir}")
                         << "\n\tEncoding: " << to_string(encoder->get_encoding())
-                        << "\n\tDestination Byte Format: " << to_string(encoder->get_dst_format())
                         << "\n\tEncoder Status: " << to_string(encoder->get_status()) << std::endl;
             return descriptor.str();
         })

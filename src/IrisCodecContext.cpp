@@ -38,14 +38,29 @@ inline int BITS_PER_PIXEL (Format format)
 {
     switch (format) {
         case Iris::FORMAT_UNDEFINED:
-        std::cerr << "Undefined format provided. Returning 0 bytes";
+        std::cerr << "Undefined format provided. Returning 0 bpp\n";
             return 0;
         case Iris::FORMAT_B8G8R8:
         case Iris::FORMAT_R8G8B8:       return 3;
         case Iris::FORMAT_B8G8R8A8:
         case Iris::FORMAT_R8G8B8A8:     return 4;
     }
-    std::cerr << "Invalid format provided. Returning 0 bytes";
+    std::cerr << "Invalid format provided. Returning 0 bpp\n";
+    return 0;
+}
+inline int BIT_DEPTH (Format format)
+{
+    switch (format) {
+            
+        case Iris::FORMAT_UNDEFINED:
+            std::cerr << "Undefined format provided. Returning 0 bit depth\n";
+                return 0;
+        case Iris::FORMAT_B8G8R8:
+        case Iris::FORMAT_R8G8B8:
+        case Iris::FORMAT_B8G8R8A8:
+        case Iris::FORMAT_R8G8B8A8: return 8;
+    }
+    std::cerr << "Invalid format provided. Returning 0 bit depth\n";
     return 0;
 }
 inline Subsampling CHECK_SUBSAMPLING (Subsampling subsample)
@@ -185,23 +200,12 @@ inline Buffer DECOMPRESS_JPEG (const DecompressTileInfo& info)
 {
     auto&       src_buffer  = info.compressed;
     Buffer      dst_buffer  = info.optionalDestination;
-    TJPF        format      = TJPF_UNKNOWN;
+    TJPF        format      = CONVERT_TO_TJPIXEL_FORMAT(info.desiredFormat);
     tjhandle    tjhandle    = NULL;
-    size_t      buffer_size = 0;
-    switch (info.desiredFormat) {
-        case Iris::FORMAT_UNDEFINED:
-            return Buffer();
-        case Iris::FORMAT_B8G8R8:
-        case Iris::FORMAT_R8G8B8:
-            buffer_size     = TILE_PIX_AREA * 3;
-            format          = TJPF_RGB;
-            break;
-        case Iris::FORMAT_B8G8R8A8:
-        case Iris::FORMAT_R8G8B8A8:
-            buffer_size     = TILE_PIX_AREA * 4;
-            format          = TJPF_RGBX;
-            break;
-    } if (format == TJPF_UNKNOWN || !buffer_size) return Buffer();
+    size_t      buffer_size = TILE_PIX_AREA*BITS_PER_PIXEL(info.desiredFormat);
+
+    if (format == TJPF_UNKNOWN || !buffer_size) throw std::runtime_error
+        ("DECOMPRESS_JPEG failed due to undefined destination pixel format");
     
     if (!dst_buffer || buffer_size > dst_buffer->size())
         dst_buffer = Create_strong_buffer(buffer_size);
@@ -217,7 +221,7 @@ inline Buffer DECOMPRESS_JPEG (const DecompressTileInfo& info)
          0, format);
         
         if (result) throw std::runtime_error
-            ("Turbojpeg failed decompress " +
+            ("DECOMPRESS_JPEG failed with tj3error " +
              std::string(tj3GetErrorStr(tjhandle)));
         
     } catch (std::runtime_error& error) {
@@ -239,20 +243,14 @@ inline Buffer COMPRESS_AVIF_CPU (const Buffer &src_buffer,
     avifEncoder*    encoder     = NULL;
     avifRWData      avifOutput  = AVIF_DATA_EMPTY;
     avifRGBImage    rgb         = AVIF_RGB_BLANK_IMAGE;
+    
     try {
-        // Prepare destination image
-        switch (format) {
-            case Iris::FORMAT_B8G8R8:
-            case Iris::FORMAT_R8G8B8:
-            case Iris::FORMAT_B8G8R8A8:
-            case Iris::FORMAT_R8G8B8A8:
-                image = avifImageCreate
-                (256, 256, 8/*change for higher depth later*/,
-                 CONVERT_TO_AVIF_SAMP(subsampling));
-                break;
-            default: throw std::runtime_error
-                ("invalid format provided");
-        } if (!image) throw std::runtime_error
+        image                   = avifImageCreate
+        (TILE_PIX_LENGTH, TILE_PIX_LENGTH,
+         BIT_DEPTH(format),
+         CONVERT_TO_AVIF_SAMP(subsampling));
+        
+        if (!image) throw std::runtime_error
             ("failed to create AVIF dst image");
         
         avifRGBImageSetDefaults(&rgb, image);
@@ -301,57 +299,36 @@ inline Buffer COMPRESS_AVIF_CPU (const Buffer &src_buffer,
     if (encoder) avifEncoderDestroy (encoder);
     avifRWDataFree (&avifOutput);
     return dst_buffer;
-      
 }
 inline Buffer DECOMPRESS_AVIF_CPU (const DecompressTileInfo& info)
 {
     auto&           src_buffer  = info.compressed;
     Buffer          dst_buffer  = info.optionalDestination;
     avifDecoder*    decoder     = NULL;
-    avifRGBImage    rgb         = AVIF_RGB_BLANK_IMAGE;
-    size_t          buffer_size = 0;
-    switch (info.desiredFormat) {
-        case Iris::FORMAT_UNDEFINED: return Buffer();
-        case Iris::FORMAT_B8G8R8:
-            buffer_size         = TILE_PIX_AREA * 3;
-            rgb.format          = AVIF_RGB_FORMAT_BGR;
-            rgb.rowBytes        = TILE_PIX_LENGTH * 3;
-            rgb.depth           = 8;
-            break;
-        case Iris::FORMAT_R8G8B8:
-            buffer_size         = TILE_PIX_AREA * 3;
-            rgb.format          = AVIF_RGB_FORMAT_RGB;
-            rgb.rowBytes        = TILE_PIX_LENGTH * 3;
-            rgb.depth           = 8;
-            break;
-        case Iris::FORMAT_B8G8R8A8:
-            buffer_size         = TILE_PIX_AREA * 4;
-            rgb.format          = AVIF_RGB_FORMAT_BGRA;
-            rgb.rowBytes        = TILE_PIX_LENGTH * 4;
-            rgb.depth           = 8;
-            break;
-        case Iris::FORMAT_R8G8B8A8:
-            buffer_size         = TILE_PIX_AREA * 4;
-            rgb.format          = AVIF_RGB_FORMAT_RGBA;
-            rgb.rowBytes        = TILE_PIX_LENGTH * 4;
-            rgb.depth           = 8;
-            break;
-    } if (rgb.format == AVIF_RGB_FORMAT_COUNT || !buffer_size)
-        return Buffer();
+    size_t          buffer_size = TILE_PIX_AREA * BITS_PER_PIXEL(info.desiredFormat);
+    
+    // Reallocate buffer if insufficient space provided
     if (!dst_buffer || dst_buffer->size() < buffer_size)
         dst_buffer = Create_strong_buffer (buffer_size);
     
-    rgb.pixels      = (uint8_t*)dst_buffer->data();
-    rgb.rowBytes    = TILE_PIX_LENGTH * 4;
-    
     try {
+        avifRGBImage rgb    = AVIF_RGB_BLANK_IMAGE;
+        rgb.format          = CONVERT_TO_AVIF_RGBFORMAT(info.desiredFormat);
+        rgb.rowBytes        = TILE_PIX_LENGTH * BITS_PER_PIXEL(info.desiredFormat);
+        rgb.depth           = BIT_DEPTH(info.desiredFormat);
+        rgb.pixels          = (uint8_t*)dst_buffer->data();
+        
+        if (rgb.format == AVIF_RGB_FORMAT_COUNT || !buffer_size) throw std::runtime_error
+            ("Failed due to undefined destination pixel format");
+
         decoder = avifDecoderCreate();
         if (decoder == NULL) throw std::runtime_error
             ("Failed to create AVIF encoder");
         decoder->maxThreads = 1;
         decoder->imageDimensionLimit = TILE_PIX_LENGTH;
         
-        avifResult result = avifDecoderSetIOMemory(decoder, (uint8_t*)src_buffer->data(), src_buffer->size());
+        avifResult result = avifDecoderSetIOMemory
+        (decoder, (uint8_t*)src_buffer->data(), src_buffer->size());
         if (result != AVIF_RESULT_OK) throw std::runtime_error
             ("Failed to set memory IO for AVIF decoder -- "+
              std::string(avifResultToString(result)));
@@ -372,7 +349,7 @@ inline Buffer DECOMPRESS_AVIF_CPU (const DecompressTileInfo& info)
              std::string(avifResultToString(result)));
         
     } catch (std::runtime_error& error) {
-        std::cerr   << "Failed to decompress AVIF tile: "
+        std::cerr   << "DECOMPRESS_AVIF_CPU error: "
                     << error.what() << "\n";
         dst_buffer = NULL;
     }

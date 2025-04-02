@@ -35,7 +35,6 @@ public:
     std::string get_src_path        () const;
     std::string get_dst_path        () const;
     Encoding    get_encoding        () const;
-    Format      get_dst_format      () const;
     Result  get_encoder_progress    (EncoderProgress&) const;
     
     void    set_src_path            (const std::string& source);
