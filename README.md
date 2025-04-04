@@ -42,7 +42,7 @@ cmake --install ./Iris-Codec/build
 ### Python
 Iris Codec is also available as a Python module. It is available as a conda package on the Conda Forge channel. The corresponding python module may also be built from source by setting `-DIRIS_BUILD_PYTHON=ON` in the above CMake command if you would rather build the module rather than install it via Anaconda. 
 ```shell
-conda install - c conda-forge Iris-Codec 
+conda install -c conda-forge Iris-Codec 
 ```
 
 
