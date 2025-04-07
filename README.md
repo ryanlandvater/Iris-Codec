@@ -20,7 +20,10 @@ This module has reliatively limited dependencies. As our encoder builds shift aw
 
 ## Installation
 ### Building From Source
-This library can be built from source using CMake. We will add this module to package managers in the near future. 
+
+This library can be built from source using CMake. 
+
+![Workflow Badge](https://github.com/IrisDigitalPathology/Iris-Codec/actions/workflows/cpp.yml/badge.svg)
 
 The following shell commands clone and build the repository. Remember to `-DCMAKE_INSTALL_PREFIX` your chosen install directory if not installing system-wide. Additionally, Iris Codec CMake script is designed to look for and dynamically link [turbo-jpeg](https://github.com/libjpeg-turbo/libjpeg-turbo) and [AVIF](https://github.com/AOMediaCodec/libavif) by default; however, some implementations would rather simply build a self-contained statically linked binary without the need to dynamically load libraries. **In some instances where reliablity is key, this may be the most secure option.** Some architectures, such as iOS require this. To enable static dependency linkage, instead set `-DIRIS_BUILD_DEPENDENCIES=ON`. More info on the dependencies lookup and **cross compiling** Iris Codec in the [cmake directory](./cmake/).
 
@@ -40,7 +43,21 @@ cmake --build ./Iris-Codec/build --config Release -j$CPU_COUNT
 cmake --install ./Iris-Codec/build
 ```
 ### Python
-Iris Codec is also available as a Python module. It is available as a conda package on the Conda Forge channel. The corresponding python module may also be built from source by setting `-DIRIS_BUILD_PYTHON=ON` in the above CMake command if you would rather build the module rather than install it via Anaconda. 
+| Build | Status | 
+| --- | --- |
+| Conda-Build | 
+---
+
+
+| Status | Name | Downloads | Version | Platforms |
+| --- | --- | --- | --- | --- |
+| [![Conda-Build](https://dev.azure.com/conda-forge/feedstock-builds/_apis/build/status/Iris-Codec-feedstock?branchName=main)](https://dev.azure.com/conda-forge/feedstock-builds/_build/latest?definitionId=25325&branchName=main)| 
+| [![Conda Recipe](https://img.shields.io/badge/recipe-iris--codec-green.svg)](https://anaconda.org/conda-forge/iris-codec) | [![Conda Downloads](https://img.shields.io/conda/dn/conda-forge/iris-codec.svg)](https://anaconda.org/conda-forge/iris-codec) | [![Conda Version](https://img.shields.io/conda/vn/conda-forge/iris-codec.svg)](https://anaconda.org/conda-forge/iris-codec) | [![Conda Platforms](https://img.shields.io/conda/pn/conda-forge/iris-codec.svg)](https://anaconda.org/conda-forge/iris-codec) |
+---
+
+Iris Codec is also available as a Python conda package on the Conda-Forge Anaconda package manager channel. The corresponding python module may also be built from source by setting `-DIRIS_BUILD_PYTHON=ON` in the above CMake command if you would rather build the module rather than install it via Anaconda. 
+
+
 ```shell
 conda install -c conda-forge Iris-Codec 
 ```
