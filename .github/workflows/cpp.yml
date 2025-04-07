@@ -14,15 +14,14 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - name: dependencies
-    - run: |
-        sudo apt update && sudo apt upgrade -y && 
-        sudo apt install libturbojpeg-dev libavif-dev openslide-tools -y
+      run: |
+        sudo apt install libjpeg-dev libavif-dev openslide-tools python3-dev yasm -y
     - name: configure
       run: |
         cmake -B build -DIRIS_BUILD_PYTHON=ON
     - name: make
       run: | 
-        cmake --build build --config Release
+        cmake --build build --config Release -j$CPU_COUNT
         
     # - name: make check
     #   run: make check
