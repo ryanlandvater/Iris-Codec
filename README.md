@@ -43,17 +43,16 @@ cmake --build ./Iris-Codec/build --config Release -j$CPU_COUNT
 cmake --install ./Iris-Codec/build
 ```
 ### Python
-| Build | Status | 
-| --- | --- |
-| Conda-Build | 
----
 
+| Status | Name | Downloads | Version |
+| --- | --- | --- | --- | 
+| [![Conda-Build](https://dev.azure.com/conda-forge/feedstock-builds/_apis/build/status/Iris-Codec-feedstock?branchName=main)](https://dev.azure.com/conda-forge/feedstock-builds/_build/latest?definitionId=25325&branchName=main)| [![Conda Recipe](https://img.shields.io/badge/recipe-iris--codec-green.svg)](https://anaconda.org/conda-forge/iris-codec) | [![Conda Downloads](https://img.shields.io/conda/dn/conda-forge/iris-codec.svg)](https://anaconda.org/conda-forge/iris-codec) | [![Conda Version](https://img.shields.io/conda/vn/conda-forge/iris-codec.svg)](https://anaconda.org/conda-forge/iris-codec) | 
 
-| Status | Name | Downloads | Version | Platforms |
-| --- | --- | --- | --- | --- |
-| [![Conda-Build](https://dev.azure.com/conda-forge/feedstock-builds/_apis/build/status/Iris-Codec-feedstock?branchName=main)](https://dev.azure.com/conda-forge/feedstock-builds/_build/latest?definitionId=25325&branchName=main)| 
-| [![Conda Recipe](https://img.shields.io/badge/recipe-iris--codec-green.svg)](https://anaconda.org/conda-forge/iris-codec) | [![Conda Downloads](https://img.shields.io/conda/dn/conda-forge/iris-codec.svg)](https://anaconda.org/conda-forge/iris-codec) | [![Conda Version](https://img.shields.io/conda/vn/conda-forge/iris-codec.svg)](https://anaconda.org/conda-forge/iris-codec) | [![Conda Platforms](https://img.shields.io/conda/pn/conda-forge/iris-codec.svg)](https://anaconda.org/conda-forge/iris-codec) |
----
+Supported Python Platforms\
+[![Conda Platforms](https://img.shields.io/conda/pn/conda-forge/iris-codec.svg)](https://anaconda.org/conda-forge/iris-codec)
+
+>[!NOTE]
+> The python Iris Codec Encoder does not support OpenSlide on Windows presently as OpenSlide does not support windows with its official Conda-Forge package. We are building in native support for vendor files and DICOM for re-encoding.
 
 Iris Codec is also available as a Python conda package on the Conda-Forge Anaconda package manager channel. The corresponding python module may also be built from source by setting `-DIRIS_BUILD_PYTHON=ON` in the above CMake command if you would rather build the module rather than install it via Anaconda. 
 
