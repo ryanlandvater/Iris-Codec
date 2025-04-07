@@ -177,8 +177,7 @@ Iris::Result get_slide_annotations(const Slide &slide, Annotations &annotations)
 __INTERNAL__Slide::__INTERNAL__Slide    (const Context& cxt, const File& file) :
 _context                                (cxt),
 _file                                   (file),
-_abstraction                            (abstract_file_structure
-                                         (file->ptr, file->size))
+_abstraction                            (abstract_file_structure(file->ptr, file->size))
 {
     
 }
@@ -243,17 +242,17 @@ Buffer __INTERNAL__Slide::read_slide_tile(const SlideTileReadInfo &info) const
     
     // Decompress the slide tile
     Buffer src = Iris::Wrap_weak_buffer_fom_data (_file->ptr + entry.offset, entry.size);
-    DecompressTileInfo decompress_info {
+    
+    // Return the decompressed file structure
+    dst_buffer = _context->decompress_tile({
         .compressed             = src,
         .optionalDestination    = dst_buffer,
         .desiredFormat          = info.desiredFormat,
         .encoding               = ttable.encoding,
-    };
-    
-    // Return the decompressed file structure
-    dst_buffer = _context->decompress_tile(decompress_info);
+    });
     if (!dst_buffer) throw std::runtime_error
         ("Failed to decompress slide tile");
+    
     return dst_buffer;
 }
 Iris::Result __INTERNAL__Slide::write_slide_annotation(const IrisCodec::Annotation &annotation)

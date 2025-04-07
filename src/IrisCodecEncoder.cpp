@@ -14,10 +14,9 @@
 
 namespace IrisCodec {
 #if IRIS_INCLUDE_OPENSLIDE
-inline void SET_SLIDE_EXTENT_OPENSLIDE (EncoderSource& src)
+inline Extent SET_SLIDE_EXTENT_OPENSLIDE (openslide_t* openslide)
 {
-    openslide_t*    openslide = src.openslide;
-    Extent&         extent    = src.extent;
+    Extent          extent;
     
     int64_t L0_width, L0_height;
     openslide_get_level0_dimensions(openslide,&L0_width,&L0_height);
@@ -42,6 +41,8 @@ inline void SET_SLIDE_EXTENT_OPENSLIDE (EncoderSource& src)
     }
     for (extent_IT = extent.layers.begin(); extent_IT != extent.layers.end(); extent_IT++)
         extent_IT->downsample = extent.layers.back().scale / extent_IT->scale;
+    
+    return extent;
 }
 inline Buffer READ_OPENSLIDE_TILE (const EncoderSource src, LayerIndex __LI, TileIndex __TI)
 {
@@ -51,8 +52,7 @@ inline Buffer READ_OPENSLIDE_TILE (const EncoderSource src, LayerIndex __LI, Til
     if (__LI    >= extent.layers.size())                return NULL;
     auto& __LE   = extent.layers[__LI];
     if (__TI    >= __LE.xTiles * __LE.yTiles)           return NULL;
-    auto buffer = Create_strong_buffer  (TILE_PIX_BYTES_RGBA);
-    
+    auto buffer         = Create_strong_buffer  (TILE_PIX_BYTES_RGBA);
     auto& level_extent  = extent.layers[__LI];
     auto openSlideLevel = static_cast<uint32_t> ((extent.layers.size()-1)-__LI);
     auto x_tile_index   = static_cast<float>    (__TI % level_extent.xTiles);
@@ -62,7 +62,6 @@ inline Buffer READ_OPENSLIDE_TILE (const EncoderSource src, LayerIndex __LI, Til
                           static_cast<int64_t>  (std::round(y_tile_index * TILE_PIX_LENGTH * level_extent.downsample)),
                           openSlideLevel,
                           TILE_PIX_LENGTH, TILE_PIX_LENGTH);
-    
     return buffer;
 }
 #endif
@@ -73,9 +72,10 @@ inline Buffer READ_SOURCE_TILE (const EncoderSource& src, LayerIndex layer, Tile
         case EncoderSource::ENCODER_SRC_UNDEFINED: throw std::runtime_error("Cannot read source tile; undefined source");
         case EncoderSource::ENCODER_SRC_IRISSLIDE:
             return IrisCodec::read_slide_tile (SlideTileReadInfo{
-                .slide      = src.irisSlide,
-                .layerIndex = layer,
-                .tileIndex  = tile
+                .slide          = src.irisSlide,
+                .layerIndex     = layer,
+                .tileIndex      = tile,
+                .desiredFormat  = src.format
         });
         case EncoderSource::ENCODER_SRC_OPENSLIDE:
             #if IRIS_INCLUDE_OPENSLIDE
@@ -84,7 +84,8 @@ inline Buffer READ_SOURCE_TILE (const EncoderSource& src, LayerIndex layer, Tile
             throw std::runtime_error("Openslide linkage was NOT compiled into this binary. Request a new version of Iris Codec with OpenSlide support if you would like to decode slide scanning vendor slide files only accessable to OpenSlide.");
             #endif
             
-        case EncoderSource::ENCODER_SRC_APERIO: throw std::runtime_error("APERIO TIFF reads not yet built; Use openslide for the moment");
+        case EncoderSource::ENCODER_SRC_APERIO:
+            throw std::runtime_error("APERIO TIFF reads not yet built; Use openslide for the moment");
     } return Buffer();
 }
 inline EncoderSource OPEN_SOURCE (std::string& path, const Context context = NULL)
@@ -92,8 +93,8 @@ inline EncoderSource OPEN_SOURCE (std::string& path, const Context context = NUL
     if (!std::filesystem::exists(path)) throw std::runtime_error
         ("File system failed to identify source file " + path);
     
-    EncoderSource source;
     if (is_iris_codec_file(path)) {
+        EncoderSource source;
         source.sourceType   = EncoderSource::ENCODER_SRC_IRISSLIDE;
         source.irisSlide    = open_slide(SlideOpenInfo {
             .filePath       = path,
@@ -104,23 +105,29 @@ inline EncoderSource OPEN_SOURCE (std::string& path, const Context context = NUL
             ("No valid Iris slide returned from IrisCodec::open_slide");
         
         source.extent       = source.irisSlide->get_slide_info().extent;
+        source.format       = source.irisSlide->get_slide_info().format;
             
         return source;
     }
     #if IRIS_INCLUDE_OPENSLIDE
     if (openslide_detect_vendor(path.c_str())) {
+        EncoderSource source;
         source.sourceType   = EncoderSource::ENCODER_SRC_OPENSLIDE;
         source.openslide    = openslide_open(path.c_str());
         
         if (!source.openslide) throw std::runtime_error
             ("No valid openslide handle returned from openslide_open");
-        
-        SET_SLIDE_EXTENT_OPENSLIDE(source);
+
+        source.extent       = SET_SLIDE_EXTENT_OPENSLIDE(source.openslide);
+        source.format       = FORMAT_B8G8R8A8; // OpenSlide always reads ARGB
         
         return source;
     }
+    throw std::runtime_error("Provided source file path was not recognized by any available decoders.");
+    #else
+    throw std::runtime_error("Provided source file path was not recognized by any available decoders. You may need an encoder built with OpenSlide enabled.");
     #endif
-    return source;
+   
 }
 inline std::string to_string (EncoderStatus status)
 {
@@ -283,7 +290,6 @@ __INTERNAL__Encoder::__INTERNAL__Encoder    (const EncodeSlideInfo& __i) :
 _context                                    (__i.context),
 _srcPath                                    (__i.srcFilePath),
 _dstPath                                    (__i.dstFilePath),
-_format                                     (__i.srcFormat),
 _encoding                                   (__i.desiredEncoding),
 _status                                     (ENCODER_INACTIVE)
 {
@@ -326,9 +332,6 @@ std::string __INTERNAL__Encoder::get_dst_path() const
 }
 Encoding __INTERNAL__Encoder::get_encoding() const {
     return _encoding;
-}
-Format __INTERNAL__Encoder::get_dst_format() const {
-    return _format;
 }
 Result __INTERNAL__Encoder::get_encoder_progress (EncoderProgress &progress) const
 {
@@ -461,12 +464,11 @@ inline static void ENCODE_SLIDE_TILES (const Context ctx,
             //  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
             //  COMPRESS PIXEL ARRAY STEP
             //  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
-            CompressTileInfo compress_tile_info {
+            auto bytes      = ctx->compress_tile({
                 .pixelArray = pixel_array,
-                .format     = FORMAT_R8G8B8A8,
+                .format     = src.format,
                 .encoding   = table.encoding
-            };
-            auto bytes      = ctx->compress_tile(compress_tile_info);
+            });
             if (!bytes) throw std::runtime_error("Failed to compress slide image data");
             //  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
             //  WRITE TO FILE STEP
@@ -627,28 +629,20 @@ Result __INTERNAL__Encoder::dispatch_encoder()
     }
     
     // Attempt to open the source slide file
-    
     auto source = OPEN_SOURCE (_srcPath);
+    
     
     // Validate encoding
     switch (_encoding) {
         case TILE_ENCODING_JPEG: break;
         case TILE_ENCODING_AVIF: break;
         case TILE_ENCODING_IRIS: throw std::runtime_error
-            ("IRIS CODEC ENCODING SUPPORT IS NOT AVAILABLE COMMUNITY USE.");
+            ("IRIS CODEC ENCODING SUPPORT IS NOT AVAILABLE FOR COMMUNITY USE.");
         default: throw std::runtime_error
             ("Encoder does not have a valid Iris::Encoding format set");
     }
-    
-    switch (_format) {
-        case Iris::FORMAT_B8G8R8:
-        case Iris::FORMAT_R8G8B8:
-        case Iris::FORMAT_B8G8R8A8:
-        case Iris::FORMAT_R8G8B8A8: break;
-        default:
-            std::cout << "Encoder does not have a desired format. Assigning FORMAT_R8G8B8A8\n";
-            _format = FORMAT_R8G8B8A8;
-    }
+    if (source.format == FORMAT_UNDEFINED)
+        source.format = FORMAT_R8G8B8A8;
     
     // Create the output file
     std::filesystem::path source_file_path = _srcPath;
@@ -713,7 +707,7 @@ Result __INTERNAL__Encoder::dispatch_encoder()
         auto n_layers       = extent.layers.size();
         
         tile_table.encoding = _encoding;
-        tile_table.format   = _format;
+        tile_table.format   = source.format;
         tile_table.layers   = TileTable::Layers(n_layers);
         tile_table.extent   = extent;
         for (auto __li = 0; __li < n_layers; ++__li) {
