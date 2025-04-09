@@ -23,7 +23,7 @@ This module has reliatively limited dependencies. As our encoder builds shift aw
 
 This library can be built from source using CMake. 
 
-![Workflow Badge](https://github.com/IrisDigitalPathology/Iris-Codec/actions/workflows/cpp.yml/badge.svg)
+[![Iris Codec CMake Build](https://github.com/IrisDigitalPathology/Iris-Codec/actions/workflows/cpp.yml/badge.svg)](https://github.com/IrisDigitalPathology/Iris-Codec/actions/workflows/cpp.yml)
 
 The following shell commands clone and build the repository. Remember to `-DCMAKE_INSTALL_PREFIX` your chosen install directory if not installing system-wide. Additionally, Iris Codec CMake script is designed to look for and dynamically link [turbo-jpeg](https://github.com/libjpeg-turbo/libjpeg-turbo) and [AVIF](https://github.com/AOMediaCodec/libavif) by default; however, some implementations would rather simply build a self-contained statically linked binary without the need to dynamically load libraries. **In some instances where reliablity is key, this may be the most secure option.** Some architectures, such as iOS require this. To enable static dependency linkage, instead set `-DIRIS_BUILD_DEPENDENCIES=ON`. More info on the dependencies lookup and **cross compiling** Iris Codec in the [cmake directory](./cmake/).
 
