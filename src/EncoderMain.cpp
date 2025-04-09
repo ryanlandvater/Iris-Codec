@@ -23,6 +23,7 @@
 #endif
 #include <chrono>
 #include <thread>
+#include <sstream>
 #include <iostream>
 #include <format>
 #include <iomanip>
