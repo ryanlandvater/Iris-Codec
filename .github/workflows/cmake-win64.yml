@@ -31,6 +31,8 @@ jobs:
       run: |
         echo "build-output-dir=${{ github.workspace }}/build" >> "$GITHUB_OUTPUT"
 
+    - name: Fetch YASM
+      run: vcpkg install yasm
     # - name: Fetch Dependencies
     #   run: |
     #     vcpkg install libjpeg-turbo libavif openslide
