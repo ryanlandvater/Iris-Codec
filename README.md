@@ -18,8 +18,8 @@ This module has reliatively limited dependencies. As our encoder builds shift aw
 
 *If you are a software engineer looking to help with Iris, we are always looking for additional passionate engineers to help in developing the Iris Project.*
 
-## Installation
-### Building From Source
+# Installation
+## Building From Source
 
 This library can be built from source using CMake. 
 
@@ -42,7 +42,7 @@ cmake -B build \
 cmake --build ./Iris-Codec/build --config Release -j$CPU_COUNT
 cmake --install ./Iris-Codec/build
 ```
-### Python
+## Python
 
 | Status | Name | Downloads | Version |
 | --- | --- | --- | --- | 
@@ -61,10 +61,13 @@ Iris Codec is also available as a Python conda package on the Conda-Forge Anacon
 conda install -c conda-forge Iris-Codec 
 ```
 
+## Javascript
+[![Iris Codec Emscripten Webassembly Build](https://github.com/IrisDigitalPathology/Iris-Codec-JavaScript/actions/workflows/emcmake.yml/badge.svg)](https://github.com/IrisDigitalPathology/Iris-Codec-JavaScript/actions/workflows/emcmake.yml)
 
+The [Iris-Codec-JavaScript repository](https://github.com/IrisDigitalPathology/Iris-Codec-JavaScript) contains the WebAssembly (WASM) build of the Iris Codec library, allowing it to be used in web browsers and Node.js applications. This implementation does not have the same dependencies, as image decoding is performed in the browser with JavaScript native codec tools. 
 
-## Implementations
-### C++
+# Implementations
+## C++
 Iris is natively a C++ program and the majority of features will first be supported in C++ followed by the other language bindings as we find time to write the bindings. 
 
 Begin by importing the [Iris Codec Core header](https://github.com/IrisDigitalPathology/Iris-Headers/blob/main/include/IrisCodecCore.hpp); it contains references to the [Iris Codec specific type definitions](https://github.com/IrisDigitalPathology/Iris-Headers/blob/main/include/IrisCodecTypes.hpp) as well as the general [Iris Core type definitions](https://github.com/IrisDigitalPathology/Iris-Headers/blob/main/include/IrisTypes.hpp). You may chose to perform your own file system validations and recovery routines. Iris will, however catch all of these as the main API methods are declared `noexcept`. Should an runtime error occur, it will be reported in the form of an `IrisResult` message, as seen in the `IrisResult validate_slide (const SlideOpenInfo&) noexcept;` call below. Successful loading of a slide file will return a valid `IrisCodec::Slide` object; failure will return a `nullptr`. 
@@ -168,7 +171,7 @@ if (weak_wrapper != result) {
 ```
 
 
-### Python
+## Python
 ```python
 #Import the Iris Codec Module
 from Iris import Codec
