@@ -199,7 +199,7 @@ int main(int argc, char const *argv[])
             << "] "
             << std::setprecision(3) << cmplt*100.f
             << "%  Time Remaining "
-            << std::format("{:02}", ETA/60) << ":" << std::format("{:02}",ETA%60);
+            << ETA/60/10 << ETA/60%10 << ":" << ETA%60/10 << ETA%60%10;
         std::cout << "\x1b[2K" << "\r" << log.str() << std::flush;;
         
         // Sleep the thread for a second between checks / updates
