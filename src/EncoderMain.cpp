@@ -25,7 +25,6 @@
 #include <thread>
 #include <sstream>
 #include <iostream>
-#include <format>
 #include <iomanip>
 #include <filesystem>
 #include <set>
