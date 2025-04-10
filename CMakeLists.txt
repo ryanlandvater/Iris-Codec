@@ -93,6 +93,8 @@ FetchContent_Declare (
     FETCHCONTENT_UPDATES_DISCONNECTED ON
 )
 # Do not export the IFE API. 
+set(IFE_BUILD_SHARED OFF)
+set(IFE_BUILD_STATIC OFF)
 add_compile_definitions(IFE_EXPORT_API=false)
 FetchContent_Declare (
     IrisFileExtension
@@ -122,7 +124,7 @@ set (
     ${CODEC_SOURCE_DIR}/IrisCodecFile.cpp
     ${CODEC_SOURCE_DIR}/IrisCodecCache.cpp
     ${CODEC_SOURCE_DIR}/IrisCodecSlide.cpp
-    ${irisheaders_SOURCE_DIR}/src/IrisBuffer.cpp
+    # ${irisheaders_SOURCE_DIR}/src/IrisBuffer.cpp
 )
 set (
     IrisCodecInclude
@@ -134,7 +136,7 @@ set (
 )
 set (
     IrisCodecDependencies
-    IrisFileExtensionStatic
+    # IrisFileExtensionLib
     ${TURBOJPEG_LIBRARY}
     ${AVIF_LIBRARY}
 )
@@ -189,6 +191,7 @@ set (
 if (IRIS_BUILD_SHARED OR IRIS_BUILD_PYTHON)
     add_library(
         IrisCodec SHARED 
+        $<TARGET_OBJECTS:IrisFileExtensionLib>
         $<TARGET_OBJECTS:IrisCodecLib>
     )
     target_link_libraries(
@@ -201,6 +204,7 @@ endif()
 if (IRIS_BUILD_STATIC)
     add_library(
         IrisCodecStatic STATIC 
+        $<TARGET_OBJECTS:IrisFileExtensionLib>
         $<TARGET_OBJECTS:IrisCodecLib>
     )
     target_link_libraries(
@@ -213,6 +217,7 @@ endif(IRIS_BUILD_STATIC)
 if (IRIS_BUILD_ENCODER AND (IRIS_BUILD_SHARED OR IRIS_BUILD_STATIC))
     add_executable (
         IrisCodecEncoder
+        $<TARGET_OBJECTS:IrisFileExtensionLib>
         $<TARGET_OBJECTS:IrisCodecLib>
         ${CODEC_SOURCE_DIR}/EncoderMain.cpp
     )
@@ -242,7 +247,7 @@ if (${PROJECT_IS_TOP_LEVEL})
         DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/Iris
     )
     install(
-        TARGETS ${IrisCodecTargets} IrisFileExtensionStatic
+        TARGETS ${IrisCodecTargets}
         EXPORT IrisCodecConfig
         FILE_SET HEADERS DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/Iris
     )
@@ -278,6 +283,7 @@ if(IRIS_BUILD_PYTHON)
     message(STATUS "Installing python modules at: ${IRIS_INSTALL_PYTHON_LIBDIR}")
     pybind11_add_module(
         IrisCodecPython
+        $<TARGET_OBJECTS:IrisFileExtensionLib>
         $<TARGET_OBJECTS:IrisCodecLib>
         ${PROJECT_SOURCE_DIR}/python/IrisCodecPython.cpp
     )
@@ -303,6 +309,7 @@ if(IRIS_BUILD_PYTHON)
     if (IRIS_BUILD_ENCODER)
         pybind11_add_module(
             IrisCodecEncoderPython
+            $<TARGET_OBJECTS:IrisFileExtensionLib>
             $<TARGET_OBJECTS:IrisCodecLib>
             ${PROJECT_SOURCE_DIR}/python/IrisEncoderPython.cpp
         )

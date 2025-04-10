@@ -1,0 +1,73 @@
+name: Construct macOS Release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      # Set fail-fast to false to ensure that feedback is delivered for all matrix combinations. Consider changing this to true when your workflow is stable.
+      fail-fast: true
+
+      matrix:
+        os: [macos-latest, macos-13]
+        build_type: [Release]
+        c_compiler: [clang]
+        include:
+          - arch: arm64
+          - os: macos-latest
+            name: macos
+            arch: arm64
+          - os: macos-13
+            name: macos
+            arch: x86_64
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set reusable strings
+      # Turn repeated input strings (such as the build output directory) into step outputs. These step outputs can be used throughout the workflow file.
+      id: strings
+      shell: bash
+      run: |
+        echo "build-output-dir=${{ github.workspace }}/build" >> "$GITHUB_OUTPUT"
+        echo "install-dir=${{ github.workspace }}/output" >> "$GITHUB_OUTPUT"
+
+    - name: Fetch Dependencies
+      if: ${{ matrix.os }} 
+      run: brew install jpeg-turbo libavif openslide
+    
+    - name: Configure CMake
+      # Configure CMake in a 'build' subdirectory. `CMAKE_BUILD_TYPE` is only required if you are using a single-configuration generator such as make.
+      # See https://cmake.org/cmake/help/latest/variable/CMAKE_BUILD_TYPE.html?highlight=cmake_build_type
+      run: >
+        cmake -B ${{ steps.strings.outputs.build-output-dir }}
+        -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+        -DCMAKE_INSTALL_PREFIX=${{ steps.strings.outputs.install-dir }}
+        -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/cmake/toolchains/${{ matrix.arch }}-${{ matrix.name }}.cmake
+        -S ${{ github.workspace }}
+
+    - name: Build
+      # Build your program with the given configuration. Note that --config is needed because the default Windows generator is a multi-config generator (Visual Studio generator).
+      run: >
+        cmake --build ${{ steps.strings.outputs.build-output-dir }} --config ${{ matrix.build_type }} -j$CPU_COUNT &&
+        cmake --install ${{ steps.strings.outputs.build-output-dir }}
+
+    - name: Package 
+      run: |
+        cp ${{ github.workspace }}/LICENSE ${{ steps.strings.outputs.install-dir }} &&
+        cp ${{ github.workspace }}/README.md ${{ steps.strings.outputs.install-dir }} &&
+        tar -cvf iris-codec-${{ matrix.name }}-${{ matrix.arch }}.tar.gz -C ${{ steps.strings.outputs.install-dir }} .
+
+    - name: Upload Release Artifact
+      env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ github.ref_name }}
+      run: |
+        gh release upload ${{ github.ref_name }} iris-codec-${{ matrix.name }}-${{ matrix.arch }}.tar.gz
