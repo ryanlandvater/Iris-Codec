@@ -1,4 +1,4 @@
-name: Construct Artifacts
+name: Construct macOS Release
 
 on:
   release:
@@ -20,32 +20,13 @@ jobs:
         build_type: [Release]
         c_compiler: [clang]
         include:
+          - arch: arm64
           - os: macos-latest
             name: macos
             arch: arm64
           - os: macos-13
             name: macos
             arch: x86_64
-        # os: [ubuntu-latest, windows-latest]
-        # build_type: [Release]
-        # c_compiler: [gcc, clang, cl]
-        # include:
-        #   - os: windows-latest
-        #     c_compiler: cl
-        #     cpp_compiler: cl
-        #   - os: ubuntu-latest
-        #     c_compiler: gcc
-        #     cpp_compiler: g++
-        #   - os: ubuntu-latest
-        #     c_compiler: clang
-        #     cpp_compiler: clang++
-        # exclude:
-        #   - os: windows-latest
-        #     c_compiler: gcc
-        #   - os: windows-latest
-        #     c_compiler: clang
-        #   - os: ubuntu-latest
-        #     c_compiler: cl
 
     steps:
     - uses: actions/checkout@v4
@@ -69,6 +50,7 @@ jobs:
         cmake -B ${{ steps.strings.outputs.build-output-dir }}
         -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
         -DCMAKE_INSTALL_PREFIX=${{ steps.strings.outputs.install-dir }}
+        -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/cmake/toolchains/${{ matrix.arch }}-${{ matrix.name }}.cmake
         -S ${{ github.workspace }}
 
     - name: Build
