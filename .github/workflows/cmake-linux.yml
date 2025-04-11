@@ -45,17 +45,17 @@ jobs:
         echo "build-output-dir=${{ github.workspace }}/build" >> "$GITHUB_OUTPUT"
 
 
-    - name: Fetch JpegTurbo
+    - name: Configure Jpeg-Turbo PPA
       run: |
-        sudo apt install yasm -y &&
-        git clone --depth 1 https://github.com/libjpeg-turbo/libjpeg-turbo.git &&
-        cmake -B ./libjpeg-turbo/build -DCMAKE_INSTALL_PREFIX='/usr/local' ./libjpeg-turbo &&
-        cmake --build ./libjpeg-turbo/build --config ${{ matrix.build_type }} -j$CPU_COUNT &&
-        sudo cmake --install ./libjpeg-turbo/build
+        wget -q -O- https://packagecloud.io/dcommander/libjpeg-turbo/gpgkey |\
+         gpg --dearmor >/etc/apt/trusted.gpg.d/libjpeg-turbo.gpg &&
+        wget https://raw.githubusercontent.com/libjpeg-turbo/repo/main/libjpeg-turbo.list \
+         -O /etc/apt/sources.list.d/libjpeg-turbo.list &&
+        sudo apt update
     
     - name: Fetch Dependencies
       run: |
-        sudo apt install libavif-dev openslide-tools python3-dev yasm -y
+        sudo apt install libjpeg-turbo-official libavif-dev openslide-tools python3-dev yasm -y
 
     
     - name: Configure CMake
@@ -63,10 +63,11 @@ jobs:
       # See https://cmake.org/cmake/help/latest/variable/CMAKE_BUILD_TYPE.html?highlight=cmake_build_type
       run: >
         cmake -B ${{ steps.strings.outputs.build-output-dir }}
-        -DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }}
-        -DCMAKE_C_COMPILER=${{ matrix.c_compiler }}
-        -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
-        -DIRIS_BUILD_PYTHON=ON
+        -D CMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }}
+        -D CMAKE_C_COMPILER=${{ matrix.c_compiler }}
+        -D CMAKE_BUILD_TYPE=${{ matrix.build_type }}
+        -D CMAKE_PREFIX_PATH="$ENV{CMAKE_PREFIX_PATH};/opt/libjpeg-turbo/lib64/cmake/libjpeg-turbo/"
+        -D IRIS_BUILD_PYTHON=ON
         -S ${{ github.workspace }}
 
     - name: Build
