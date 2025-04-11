@@ -44,8 +44,8 @@ jobs:
 
     - name: Configure Jpeg-Turbo PPA
       run: |
-        wget -q -O- https://packagecloud.io/dcommander/libjpeg-turbo/gpgkey |\
-          sudo gpg --dearmor >/etc/apt/trusted.gpg.d/libjpeg-turbo.gpg &&
+        sudo wget -O- https://packagecloud.io/dcommander/libjpeg-turbo/gpgkey |\
+         sudo gpg --dearmor >/etc/apt/trusted.gpg.d/libjpeg-turbo.gpg &&
         sudo wget https://raw.githubusercontent.com/libjpeg-turbo/repo/main/libjpeg-turbo.list \
           -O /etc/apt/sources.list.d/libjpeg-turbo.list &&
         sudo apt update
