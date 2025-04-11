@@ -65,7 +65,7 @@ inline ArgumentFlag PARSE_ARGUMENT (const char* arg_str) {
 }
 inline IrisCodec::Encoding PARSE_ENCODING (std::string encoding_string)
 {
-    for (auto& c : encoding_string) toupper(c);
+    for (auto& c : encoding_string) c = toupper(c);
     if (strcmp(encoding_string.c_str(), "JPEG") == 0)
         return IrisCodec::TILE_ENCODING_JPEG;
     if (strcmp(encoding_string.c_str(), "AVIF") == 0)

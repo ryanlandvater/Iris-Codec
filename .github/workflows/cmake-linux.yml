@@ -55,7 +55,7 @@ jobs:
     
     - name: Fetch Dependencies
       run: |
-        sudo apt install libjpeg-turbo-official libavif-dev openslide-tools python3-dev yasm -y
+        sudo apt install libjpeg-turbo-official libavif-dev openslide-tools python3-dev -y
 
     
     - name: Configure CMake
@@ -63,12 +63,13 @@ jobs:
       # See https://cmake.org/cmake/help/latest/variable/CMAKE_BUILD_TYPE.html?highlight=cmake_build_type
       run: >
         cmake -B ${{ steps.strings.outputs.build-output-dir }}
+        -S ${{ github.workspace }}
         -D CMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }}
         -D CMAKE_C_COMPILER=${{ matrix.c_compiler }}
         -D CMAKE_BUILD_TYPE=${{ matrix.build_type }}
-        -D CMAKE_PREFIX_PATH="$ENV{CMAKE_PREFIX_PATH};/opt/libjpeg-turbo/lib64/cmake/libjpeg-turbo/"
         -D IRIS_BUILD_PYTHON=ON
-        -S ${{ github.workspace }}
+        -D CMAKE_PREFIX_PATH="$ENV{CMAKE_PREFIX_PATH};/opt/libjpeg-turbo/lib64/cmake/libjpeg-turbo/"
+        -D TURBOJPEG_INCLUDE="/opt/libjpeg-turbo/include/"
 
     - name: Build
       # Build your program with the given configuration. Note that --config is needed because the default Windows generator is a multi-config generator (Visual Studio generator).

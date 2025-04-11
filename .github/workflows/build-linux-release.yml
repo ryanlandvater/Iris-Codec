@@ -62,8 +62,9 @@ jobs:
         -D CMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }}
         -D CMAKE_C_COMPILER=${{ matrix.c_compiler }}
         -D CMAKE_BUILD_TYPE=${{ matrix.build_type }}
-        -D CMAKE_PREFIX_PATH="$ENV{CMAKE_PREFIX_PATH};/opt/libjpeg-turbo/lib64/cmake/libjpeg-turbo/"
         -D CMAKE_INSTALL_PREFIX=${{ steps.strings.outputs.install-dir }}
+        -D CMAKE_PREFIX_PATH="$ENV{CMAKE_PREFIX_PATH};/opt/libjpeg-turbo/lib64/cmake/libjpeg-turbo/"
+        -D TURBOJPEG_INCLUDE="/opt/libjpeg-turbo/include/"
         -S ${{ github.workspace }}
 
     - name: Build
