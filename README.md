@@ -23,9 +23,9 @@ This module has reliatively limited dependencies. As our encoder builds shift aw
 
 This library can be built from source using CMake. 
 
-[![Iris Codec CMake macOS CI](https://github.com/IrisDigitalPathology/Iris-Codec/actions/workflows/cmake-macos.yml/badge.svg)](https://github.com/IrisDigitalPathology/Iris-Codec/actions/workflows/cmake-macos.yml)\
-[![Iris Codec Linux CMake CI](https://github.com/IrisDigitalPathology/Iris-Codec/actions/workflows/cmake-linux.yml/badge.svg)](https://github.com/IrisDigitalPathology/Iris-Codec/actions/workflows/cmake-linux.yml)\
-[![Iris Codec Windows CMake CI](https://github.com/IrisDigitalPathology/Iris-Codec/actions/workflows/cmake-win64.yml/badge.svg)](https://github.com/IrisDigitalPathology/Iris-Codec/actions/workflows/cmake-win64.yml)
+[![Iris Codec CMake macOS CI](https://github.com/IrisDigitalPathology/Iris-Codec/actions/workflows/cmake-macos-CI.yml/badge.svg)](https://github.com/IrisDigitalPathology/Iris-Codec/actions/workflows/cmake-macos-CI.yml)\
+[![Iris Codec Linux CMake CI](https://github.com/IrisDigitalPathology/Iris-Codec/actions/workflows/cmake-linux-CI.yml/badge.svg)](https://github.com/IrisDigitalPathology/Iris-Codec/actions/workflows/cmake-linux-CI.yml)\
+[![Iris Codec Windows CMake CI](https://github.com/IrisDigitalPathology/Iris-Codec/actions/workflows/cmake-win64-CI.yml/badge.svg)](https://github.com/IrisDigitalPathology/Iris-Codec/actions/workflows/cmake-win64-CI.yml)
 
 The following shell commands clone and build the repository. Remember to `-DCMAKE_INSTALL_PREFIX` your chosen install directory if not installing system-wide. Additionally, Iris Codec CMake script is designed to look for and dynamically link [turbo-jpeg](https://github.com/libjpeg-turbo/libjpeg-turbo) and [AVIF](https://github.com/AOMediaCodec/libavif) by default; however, some implementations would rather simply build a self-contained statically linked binary without the need to dynamically load libraries. **In some instances where reliablity is key, this may be the most secure option.** Some architectures, such as iOS require this. To enable static dependency linkage, instead set `-DIRIS_BUILD_DEPENDENCIES=ON`. More info on the dependencies lookup and **cross compiling** Iris Codec in the [cmake directory](./cmake/).
 
