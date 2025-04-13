@@ -1,0 +1,36 @@
+# This starter workflow is for a CMake project running on multiple platforms. There is a different starter workflow if you just want a single platform.
+# See: https://github.com/actions/starter-workflows/blob/main/ci/cmake-single-platform.yml
+name: Iris Codec Windows CMake CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+      strategy:
+        fail-fast: false
+        
+        matrix:
+          os: [windows-latest]
+          build_type: [Release]
+          c_compiler: [cl]
+
+          include: 
+            - c_compiler: cl
+              cpp_complier: cl
+            - os: windows-latest
+              name: windows
+              arch: x86_64
+
+      uses: ./.github/workflows/build-win.yml
+      with:
+        os: ${{ matrix.os }}
+        c_compiler: ${{ matrix.c_compiler }}
+        cpp_compiler: ${{ matrix.cpp_complier }}
+        build_type: ${{ matrix.build_type }}
+        artifact: ${{ matrix.name }}-${{ matrix.arch }}
+        iris_cmake_flags: >
+          -D IRIS_BUILD_PYTHON=ON

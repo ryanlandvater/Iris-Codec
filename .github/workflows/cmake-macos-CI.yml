@@ -1,0 +1,33 @@
+# This starter workflow is for a CMake project running on multiple platforms. There is a different starter workflow if you just want a single platform.
+# See: https://github.com/actions/starter-workflows/blob/main/ci/cmake-single-platform.yml
+name: Iris Codec macOS CMake CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      
+      matrix:
+        os: [macos-latest, macos-13]
+        build_type: [Release]
+        include:
+          - os: macos-latest
+            name: macos
+            arch: arm64
+          - os: macos-13
+            name: macos
+            arch: x86_64
+
+    uses: ./.github/workflows/build-macos.yml
+    with:
+      os: ${{ matrix.os }}
+      build_type: ${{ matrix.build_type }}
+      artifact: ${{ matrix.name }}-${{ matrix.arch }}
+      iris_cmake_flags: >
+        -D IRIS_BUILD_PYTHON=ON
