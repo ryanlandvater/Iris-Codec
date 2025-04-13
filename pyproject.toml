@@ -8,7 +8,7 @@
 # Choosing a build backend:
 # https://packaging.python.org/en/latest/tutorials/packaging-projects/#choosing-a-build-backend
 [build-system]
-requires = ["scikit-build-core>=0.10", "pybind11"]
+requires = ["scikit-build-core>=0.10", "pybind11","yasm"]
 build-backend = "scikit_build_core.build"
 
 
@@ -67,7 +67,7 @@ classifiers = [
 #
 # For an analysis of this field vs pip's requirements files see:
 # https://packaging.python.org/discussions/install-requires-vs-requirements/
-dependencies = ["turbojpeg", "avif", "openslide-bin"]
+dependencies = ["openslide-bin"]
 
 # List additional groups of dependencies here (e.g. development
 # dependencies). Users will be able to install these using the "extras"
@@ -109,6 +109,7 @@ dependencies = ["turbojpeg", "avif", "openslide-bin"]
 wheel.expand-macos-universal-tags = true
 minimum-version = "build-system.requires"
 cmake.args = [
+  "-D CMAKE_INSTALL_PYTHON_LIBDIR=${SKBUILD_PLATLIB_DIR}",
   "-D IRIS_BUILD_PYTHON=ON",
   "-D IRIS_BUILD_STATIC=OFF",
   "-D IRIS_BUILD_SHARED=OFF",

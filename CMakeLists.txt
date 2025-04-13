@@ -148,7 +148,6 @@ if (IRIS_BUILD_ENCODER)
         include(./cmake/openslide.cmake)
         message(STATUS "Found OPENSLIDE_LIB: ${OPENSLIDE_LIB}")
         set(IrisCodecInclude ${IrisCodecInclude} ${OPENSLIDE_DIR})
-        set(IrisCodecDependencies ${IrisCodecDependencies} ${OPENSLIDE_LIB})
     else ()
         add_compile_definitions(IRIS_INCLUDE_OPENSLIDE=0)
     endif()
@@ -226,6 +225,7 @@ if (IRIS_BUILD_ENCODER AND (IRIS_BUILD_SHARED OR IRIS_BUILD_STATIC))
         IrisCodecEncoder
         PRIVATE IrisHeaders
         PRIVATE ${IrisCodecDependencies}
+        PRIVATE ${OPENSLIDE_LIB}
     )
     set(IrisCodecTargets ${IrisCodecTargets} IrisCodecEncoder)
 endif()
@@ -327,6 +327,7 @@ if(IRIS_BUILD_PYTHON)
             IrisCodecEncoderPython
             PRIVATE IrisHeaders
             PRIVATE ${IrisCodecDependencies}
+            PRIVATE ${OPENSLIDE_LIB}
         )
         install(
             TARGETS IrisCodecEncoderPython

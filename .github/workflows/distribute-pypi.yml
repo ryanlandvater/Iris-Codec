@@ -1,0 +1,8 @@
+name: Distribute Python Artifacts to PyPi
+
+on:
+    release:
+      types: [published]
+
+permissions:
+  contents: write
