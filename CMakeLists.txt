@@ -124,10 +124,14 @@ set (
     ${CODEC_SOURCE_DIR}/IrisCodecFile.cpp
     ${CODEC_SOURCE_DIR}/IrisCodecCache.cpp
     ${CODEC_SOURCE_DIR}/IrisCodecSlide.cpp
-    # ${irisheaders_SOURCE_DIR}/src/IrisBuffer.cpp
+)
+set (
+    IrisCodecEncoderSources
+    ${CODEC_SOURCE_DIR}/IrisCodecEncoder.cpp
 )
 set (
     IrisCodecInclude
+    ${CODEC_SOURCE_DIR}
     ${IFE_SOURCE_DIR}
     ${glm_SOURCE_DIR}
     ${irisheaders_SOURCE_DIR}/priv
@@ -136,18 +140,15 @@ set (
 )
 set (
     IrisCodecDependencies
-    # IrisFileExtensionLib
     ${TURBOJPEG_LIBRARY}
     ${AVIF_LIBRARY}
 )
 if (IRIS_BUILD_ENCODER)
-    set(IrisCodecSources ${IrisCodecSources} ${CODEC_SOURCE_DIR}/IrisCodecEncoder.cpp)
     if (IRIS_USE_OPENSLIDE)
         add_compile_definitions(IRIS_INCLUDE_OPENSLIDE=1)
         message(STATUS "BUILDING IRIS CODEC ENCODER: Encoding from vendor files requires Openslide")
         include(./cmake/openslide.cmake)
         message(STATUS "Found OPENSLIDE_LIB: ${OPENSLIDE_LIB}")
-        set(IrisCodecInclude ${IrisCodecInclude} ${OPENSLIDE_DIR})
     else ()
         add_compile_definitions(IRIS_INCLUDE_OPENSLIDE=0)
     endif()
@@ -187,7 +188,7 @@ set (
     IrisCodecTargets
     IrisCodecLib
 )
-if (IRIS_BUILD_SHARED OR IRIS_BUILD_PYTHON)
+if (IRIS_BUILD_SHARED)
     add_library(
         IrisCodec SHARED 
         $<TARGET_OBJECTS:IrisFileExtensionLib>
@@ -218,9 +219,14 @@ if (IRIS_BUILD_ENCODER AND (IRIS_BUILD_SHARED OR IRIS_BUILD_STATIC))
         IrisCodecEncoder
         $<TARGET_OBJECTS:IrisFileExtensionLib>
         $<TARGET_OBJECTS:IrisCodecLib>
+        ${IrisCodecEncoderSources}
         ${CODEC_SOURCE_DIR}/EncoderMain.cpp
     )
-
+    target_include_directories(
+        IrisCodecEncoder 
+        PRIVATE ${IrisCodecInclude}
+        PRIVATE ${OPENSLIDE_DIR}
+    )
     target_link_libraries (
         IrisCodecEncoder
         PRIVATE IrisHeaders
@@ -234,7 +240,7 @@ endif()
 # Installation
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-if (${PROJECT_IS_TOP_LEVEL})
+if (${PROJECT_IS_TOP_LEVEL} AND (IRIS_BUILD_SHARED OR IRIS_BUILD_STATIC))
     install(
         TARGETS IrisHeaders
         EXPORT IrisHeadersConfig
@@ -289,9 +295,7 @@ if(IRIS_BUILD_PYTHON)
     )
     target_include_directories (
         IrisCodecPython 
-        PRIVATE ${irisheaders_SOURCE_DIR}/priv
-        PRIVATE ${IFE_SOURCE_DIR}
-        PRIVATE ${CODEC_SOURCE_DIR}
+        PRIVATE ${IrisCodecInclude}
     )
     set_property(
         TARGET IrisCodecPython
@@ -311,13 +315,13 @@ if(IRIS_BUILD_PYTHON)
             IrisCodecEncoderPython
             $<TARGET_OBJECTS:IrisFileExtensionLib>
             $<TARGET_OBJECTS:IrisCodecLib>
+            ${IrisCodecEncoderSources}
             ${PROJECT_SOURCE_DIR}/python/IrisEncoderPython.cpp
         )
         target_include_directories (
             IrisCodecEncoderPython 
-            PRIVATE ${irisheaders_SOURCE_DIR}/priv
-            PRIVATE ${IFE_SOURCE_DIR}
-            PRIVATE ${CODEC_SOURCE_DIR}
+            PRIVATE ${IrisCodecInclude}
+            PRIVATE ${OPENSLIDE_DIR}
         )
         set_property(
             TARGET IrisCodecEncoderPython

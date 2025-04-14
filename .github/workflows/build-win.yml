@@ -46,7 +46,7 @@ jobs:
           core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
           
     - name: Configure Vcpkg
-      run: |
+      run: >
         git clone --depth 1 https://github.com/microsoft/vcpkg.git ${{ github.workspace }}\vcpkg && 
         ${{ github.workspace }}\vcpkg\bootstrap-vcpkg.bat &&
         ${{ github.workspace }}\vcpkg\vcpkg.exe install libjpeg-turbo libavif --binarysource="clear;x-gha,readwrite"

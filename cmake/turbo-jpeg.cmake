@@ -14,7 +14,7 @@ if (NOT IRIS_BUILD_DEPENDENCIES)
     find_package(libjpeg-turbo)
     if (libjpeg-turbo_FOUND)
         message(STATUS "Turbo-Jpeg FOUND: version ${libjpeg-turbo_VERSION}")
-        set(TURBOJPEG_LIBRARY libjpeg-turbo::turbojpeg)
+        set(TURBOJPEG_LIBRARY  $<IF:$<TARGET_EXISTS:libjpeg-turbo::turbojpeg>,libjpeg-turbo::turbojpeg,libjpeg-turbo::turbojpeg-static>)
     endif()
     find_path(TURBOJPEG_INCLUDE turbojpeg.h)
 else ()
@@ -44,7 +44,6 @@ if (NOT TURBOJPEG_LIBRARY OR NOT TURBOJPEG_INCLUDE)
             -D ENABLE_SHARED=OFF
             -D CMAKE_POSITION_INDEPENDENT_CODE=ON
             -D CMAKE_TOOLCHAIN_FILE=${CMAKE_TOOLCHAIN_FILE}
-            -D CMAKE_ASM_NASM_COMPILER=yasm
         FIND_PACKAGE_ARGS NAMES libjpeg-turbo
         BUILD_BYPRODUCTS ${TURBOJPEG_LIBRARY}
     )
