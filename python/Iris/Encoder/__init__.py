@@ -1,5 +1,5 @@
 from __future__ import absolute_import
-import os, platform, sys, time, openslide
+import os, platform, sys, time
 from .. import Iris
 from ..Iris import Codec
 from .Encoder import *
