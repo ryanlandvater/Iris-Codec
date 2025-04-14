@@ -36,7 +36,7 @@ message(WARNING "Downloading OpenSlide precompiled binaries. It is up to you to 
                 RESULT_VARIABLE extract_success
             )
             find_library (OPENSLIDE_LIB openslide HINTS ${CMAKE_CURRENT_BINARY_DIR}/_deps/openslide-bin-4.0.0.6-macos-arm64-x86_64/lib)
-            find_path(OPENSLIDE_DIR openslide/openslide.h PATHS ${CMAKE_CURRENT_BINARY_DIR}/_deps/openslide-bin-4.0.0.6-macos-arm64-x86_64)
+            find_path(OPENSLIDE_DIR openslide/openslide.h PATHS ${CMAKE_CURRENT_BINARY_DIR}/_deps/openslide-bin-4.0.0.6-macos-arm64-x86_64/include)
         else()
             if (${CMAKE_SYSTEM_PROCESSOR} MATCHES "aarch64" OR ${CMAKE_SYSTEM_PROCESSOR} MATCHES "ARM64")
                 message(STATUS "Downloading https://github.com/openslide/openslide-bin/releases/download/v4.0.0.6/openslide-bin-4.0.0.5-linux-aarch64.tar.xz...")
