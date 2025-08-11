@@ -23,7 +23,6 @@
 #include <map>
 #include <set>
 
-
 // Convenience Serialization functions
 // MARK: - SERIALIZATION HELPER FUNCTIONS
 namespace Iris {
@@ -120,16 +119,16 @@ inline std::vector<std::string> PARSE_RESPONSE_HEADERS (emscripten_fetch_t*f)
 inline size_t PARSE_REMOTE_FILE_SIZE (emscripten_fetch_t *f)
 {
     auto response_headers = PARSE_RESPONSE_HEADERS(f);
-    
     size_t file_size = 0;
     for (auto _entry = response_headers.begin();
          _entry != response_headers.end(); ++_entry)
         if (_entry->compare("content-length") == 0 &&
             _entry+1 != response_headers.end()) {
-            file_size = std::stoull(*++_entry);
+            auto& entry = *++_entry;
+            entry.erase(entry.find_last_not_of(" \t\r\n")+1);
+            file_size = std::stoull(entry);
             break;
         }
-    
     if (!file_size) throw std::runtime_error
         ("Content-Length header not found");
     return file_size;
@@ -245,83 +244,94 @@ public:
         // Return immediately
     }
 };
-void _validateFileStructure(const std::string& url, emscripten::val onDone) {
+static void CONFIRM_RANGE_READS (const std::string &url, const emscripten::val &onDone, std::function<void()>fn)
+{
     auto fetch = new Fetch ();
-    fetch->_onSuccess = [url, onDone](emscripten_fetch_t*f)
+    fetch->_onSuccess = [url, onDone, fn](emscripten_fetch_t*f)
     {
-        
-        try {
-            if (!f || f->status != 200) throw std::runtime_error
-                (f?"Failed to fetch file size (HTTP "+std::to_string(f->status)+"):"+f->statusText:
-                 "Failed to fetch file size: invalid response structure (emscripten-fetch error)");
-
-            size_t file_size = PARSE_REMOTE_FILE_SIZE (f);
-            
+        if (!f || f->status != 206) {
+            onDone(val(Iris::Result(Iris::IRIS_FAILURE,
+            (f?"Ranged-read test failed. Ensure your server supports streaming (HTTP "+
+             std::to_string(f->status)+"):"+f->statusText:
+             "Ranged-read test failed. Ensure your server supports streaming"))));
+            return; }
+        fn();
+    };
+    fetch->_onFailure = [onDone](emscripten_fetch_t* f){
+        std::cerr   << "[ERROR] Failed ranged-read test"
+        << "Failed Ranged-read test.\n";
+        onDone(val(Iris::Result(Iris::IRIS_FAILURE,
+            "Ranged-read test failed. Ensure your server supports HTTP streaming")));
+    };
+    const std::string range_header = "bytes=0-"
+        + std::to_string(Serialization::FILE_HEADER::HEADER_SIZE);
+    const std::vector<const char*> requestHeaders = {
+        "Range", range_header.c_str(),
+        nullptr
+    };
+    emscripten_fetch_attr_t attr;
+    emscripten_fetch_attr_init(&attr);
+    strcpy(attr.requestMethod, "GET");
+    attr.userData       = fetch;
+    attr.requestHeaders = requestHeaders.data();
+    attr.attributes     = EMSCRIPTEN_FETCH_LOAD_TO_MEMORY;
+    attr.onsuccess      = ON_SUCCESS;
+    attr.onerror        = ON_FAILURE;
+    attr.timeoutMSecs   = 1000;
+    emscripten_fetch(&attr, url.c_str());
+    // Return immediately
+}
+static void FETCH_FILE_SIZE (const std::string &url, const emscripten::val &onDone, std::function<void(size_t file_size)>fn)
+{
+    auto fetch = new Fetch ();
+    fetch->_onSuccess = [url, onDone, fn](emscripten_fetch_t*f)
+    {
+        if (!f || f->status != 200) {
+            onDone(val(Iris::Result(Iris::IRIS_FAILURE,
+            (f?"Failed to fetch file size (HTTP "+std::to_string(f->status)+"):"+f->statusText:
+             "Failed to fetch file size: invalid response structure (emscripten-fetch error)"))));
+            return; }
+        size_t file_size = PARSE_REMOTE_FILE_SIZE (f);
+        fn(file_size);
+    };
+    fetch->_onFailure = [onDone](emscripten_fetch_t* f){
+        std::cerr   << "[ERROR] Failed to validate file structure: "
+        << "Failed to perform HEAD request.\n";
+        onDone(val(Iris::Result(Iris::IRIS_FAILURE,
+                    f?"Failed to fetch file size (HTTP "+std::to_string(f->status)+"):"+f->statusText:
+                     "Failed to fetch file size: invalid response structure (emscripten-fetch error)")));
+                    return;
+    };
+    
+    emscripten_fetch_attr_t attr;
+    emscripten_fetch_attr_init(&attr);
+    strcpy(attr.requestMethod, "HEAD");
+    attr.userData   = fetch;
+    attr.attributes = EMSCRIPTEN_FETCH_LOAD_TO_MEMORY;
+    attr.onsuccess  = ON_SUCCESS;
+    attr.onerror    = ON_FAILURE;
+    emscripten_fetch(&attr, url.c_str());
+    // Return immediately
+}
+void _validateFileStructure(const std::string& url, emscripten::val onDone) {
+    FETCH_FILE_SIZE (url, onDone, [url, onDone](size_t file_size){
+        CONFIRM_RANGE_READS(url, onDone, [url, onDone, file_size](){
             // Validate the remote file structure
             auto result = validate_file_structure(url, file_size);
             // Pass the result back to JavaScript
             onDone(val(result));
-        } catch (std::runtime_error& error) {
-            onDone(val(Iris::Result(Iris::IRIS_FAILURE,error.what())));
-        }
-    };
-    fetch->_onFailure = [onDone](emscripten_fetch_t* f){
-        std::cerr   << "[ERROR] Failed to validate file structure: "
-                    << "Failed to perform HEAD request.\n";
-        onDone(val(Iris::Result(Iris::IRIS_FAILURE,"Failed to perform HEAD request")));
-    };
-    
-    emscripten_fetch_attr_t attr;
-    emscripten_fetch_attr_init(&attr);
-    strcpy(attr.requestMethod, "HEAD");
-    attr.userData = fetch;
-    // Set the callbacks
-    attr.attributes = EMSCRIPTEN_FETCH_LOAD_TO_MEMORY;
-    attr.onsuccess = ON_SUCCESS;
-    attr.onerror = ON_FAILURE;
-    emscripten_fetch(&attr, url.c_str());
-    // Return immediately
+        });
+    });
 }
 void _openSlide(const std::string& url, emscripten::val onDone) {
-    auto fetch = new Fetch ();
-    fetch->_onSuccess = [url, onDone](emscripten_fetch_t*f)
-    {
-        try {
-            if (!f || f->status != 200) throw std::runtime_error
-                (f?"Failed to fetch file size (HTTP "+std::to_string(f->status)+"):"+f->statusText:
-                 "Failed to fetch file size: invalid response structure (emscripten-fetch error)");
-            
-            size_t file_size = PARSE_REMOTE_FILE_SIZE (f);
-            
-            // Validate the remote file structure
-            auto result = validate_file_structure(url, file_size);
-            if (result != IRIS_SUCCESS) throw std::runtime_error
-                ("Failed to validate Iris Slide: " + result.message);
+    FETCH_FILE_SIZE (url, onDone, [url, onDone](size_t file_size){
+        CONFIRM_RANGE_READS(url, onDone, [url, onDone, file_size](){
+            // Abstract the file structure
             auto file = abstract_file_structure(url, file_size);
-            
-            // Pass the resulting slide back to JavaScript
+            // And return the new slide abstraction structure
             onDone(val(std::make_shared<__INTERNAL__Slide>(url,file)));
-            
-        } catch (std::runtime_error& error) {
-            onDone(val(val::undefined()));
-        }
-        
-    };
-    fetch->_onFailure = [onDone](emscripten_fetch_t* f){
-        std::cerr   << "[ERROR] Failed to validate file structure: "
-                    << "Failed to perform HEAD request.\n";
-        onDone(val(val::undefined()));
-    };
-    
-    emscripten_fetch_attr_t attr;
-    emscripten_fetch_attr_init(&attr);
-    strcpy(attr.requestMethod, "HEAD");
-    attr.userData = fetch;
-    attr.attributes = EMSCRIPTEN_FETCH_LOAD_TO_MEMORY;
-    attr.onsuccess = ON_SUCCESS;
-    attr.onerror = ON_FAILURE;
-    emscripten_fetch(&attr, url.c_str());
-    // Return immediately
+        });
+    });
 }
 } // END IRIS_CODEC
 
@@ -444,5 +454,4 @@ EMSCRIPTEN_BINDINGS(iris_codec) {
     
     function("validateFileStructure", &_validateFileStructure);
     function("openIrisSlide", &_openSlide);
-
 }
