@@ -1,8 +1,6 @@
 #include "IrisCodecPriv.hpp"
 #include <filesystem>
-#include <vector>
-#include <string>
-#include <memory>
+#include <sstream>
 
 #ifdef __cplusplus
 extern "C" {
@@ -95,6 +93,7 @@ inline DicomLevelDimension GET_LEVEL_DIMENSION
         const auto c_err = dcm_error_get_message(error);
         std::string msg = c_err?c_err:"";
         dcm_error_clear(&error);
+        throw std::runtime_error
         ("Failed to get TotalPixelMatrixColumns value for level " + msg);
     }
     element = dcm_dataset_get(&error, dataset, 0x00480007);

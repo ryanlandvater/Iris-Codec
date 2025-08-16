@@ -181,7 +181,7 @@ set (
     IrisCodecEncoderDependencies
     ${IrisCodecDependencies}
     ${OPENSLIDE_LIB}
-    ${LIBDICOM_LIBRARY}
+    ${DICOM_LIBRARY}
     Threads::Threads
 )
 add_library(
@@ -273,7 +273,7 @@ if (IRIS_BUILD_ENCODER AND (IRIS_BUILD_SHARED OR IRIS_BUILD_STATIC))
         PRIVATE ${IrisCodecEncoderDependencies}
     )
     set(IrisCodecTargets ${IrisCodecTargets} IrisCodecEncoder)
-    if (LIBDICOM_EXTERNAL_PROJECT_ADD)
+    if (DICOM_EXTERNAL_PROJECT_ADD)
         add_dependencies(IrisCodecEncoder libdicom)
     endif()
 endif()
