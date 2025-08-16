@@ -22,10 +22,11 @@
 #include <thread>
 #include <sstream>
 #include <iostream>
-#include <format>
 #include <iomanip>
 #include <filesystem>
 #include <set>
+#include <iomanip>   // for std::setfill, std::setw
+
 #include "IrisCodecCore.hpp"
 constexpr char help_statement[] = 
 "Iris Codec Encoder allows for the encoding of whole slide image \
@@ -150,8 +151,8 @@ int main(int argc, char const *argv[])
                     std::cerr<<"concurrency argument requires a number of threads (should be less than cores)\n";
                     return EXIT_FAILURE;
                 } auto arg = std::string(argv[++argi]);
-                auto result = std::from_chars(arg.data(), arg.data()+arg.size(), info.concurrency);
-                if (result.ec != std::errc{}) {
+                try {std::stoi(argv[++argi]);}
+                catch (...) {
                     std::cerr   << "Failed to parse a thread number for concurrency from the argument \""
                     << arg << "\"\n";
                     return EXIT_FAILURE;
@@ -227,14 +228,18 @@ int main(int argc, char const *argv[])
         log << "[";
         for (int block_i = 0; block_i < progress_bar_width*cmplt; ++block_i)
             log << std::string(reinterpret_cast<const char*>(complt_char.c_str()),complt_char.size());
+        std::ostringstream eta_stream;
+        eta_stream << std::setfill('0') << std::setw(2) << (ETA/60)
+                   << ":" << std::setfill('0') << std::setw(2) << (ETA%60);
+        std::ostringstream dur_stream;
+        dur_stream << std::setfill('0') << std::setw(2) << (DUR.count()/60)
+                   << ":" << std::setfill('0') << std::setw(2) << (DUR.count()%60);
         log << std::string(progress_bar_width*(1-cmplt),'.')
             << "] "
             << std::setprecision(3) << cmplt*100.f
             << "%  Time Remaining "
-            << std::format("{:02}", ETA/60) << ":" << std::format("{:02}",ETA%60)
-            << "(" << std::format("{:02}", DUR.count()/60) << ":" << std::format("{:02}",DUR.count()%60)
-            << " elapsed)";
-        std::cout << "\x1b[2K" << "\r" << log.str() << std::flush;;
+            << eta_stream.str() << " (" << dur_stream.str() << " elapsed)";
+        std::cout << "\x1b[2K" << "\r" << log.str() << std::flush;
         
         // Sleep the thread for a second between checks / updates
         std::this_thread::sleep_for(time::seconds(1));

@@ -252,20 +252,7 @@ FAILED_PARSE:
     return 0;
 }
 
-//std::stringstream stream;
-//stream << "{";
-//stream << "\"type\": \"slide_metadata\",";
-//if (info.format)
-//    stream  <<"\"format\": " << SERIALIZE_FORMAT (info.format) << ",";
-//if (info.encoding)
-//    stream  <<"\"encoding\": " << SERIALIZE_ENCODING(info.encoding) << ",";
-//
-//stream <<"\"extent\": ";
-//SERALIZE_SLIDE_EXTENT(info.extent,stream);
-//
-//stream.seekp(-1,stream.cur) << "}";
-//return stream.str();
-constexpr std::string quote = "\"";
+const std::string quote = "\"";
 static bool COLLECT_SEQ (const DcmDataSet* set, uint32_t index, void* stream_ptr);
 static bool COLLECT_SEQ_TAG (const DcmElement* element, void* stream_ptr) {
     auto& __stream = *reinterpret_cast
