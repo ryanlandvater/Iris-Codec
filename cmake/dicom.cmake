@@ -58,12 +58,14 @@ if (NOT DICOM_LIBRARY OR NOT DICOM_INCLUDE)
             --default-library=static
             -Dlibdir=lib
             -Db_staticpic=true
-            -Dshared=false
             <SOURCE_DIR> <BINARY_DIR>
         BUILD_COMMAND ${MESON_EXECUTABLE} compile -C <BINARY_DIR>
         INSTALL_COMMAND ${MESON_EXECUTABLE} install -C <BINARY_DIR>
     )
 endif()
+
+message(STATUS "DICOM_LIBRARY: ${DICOM_LIBRARY}")
+message(STATUS "DICOM_INCLUDE: ${DICOM_INCLUDE}")
 
 include_directories(
     ${DICOM_INCLUDE}

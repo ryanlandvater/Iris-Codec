@@ -365,12 +365,10 @@ if(IRIS_BUILD_PYTHON)
         DESTINATION ${IRIS_INSTALL_PYTHON_LIBDIR}/Iris
     )
     if (IRIS_BUILD_ENCODER)
-        # Copy install the python source files
         install(
             DIRECTORY ${PROJECT_SOURCE_DIR}/python/Iris/Encoder
             DESTINATION ${IRIS_INSTALL_PYTHON_LIBDIR}/Iris/
         )
-        # Then build the Python module
         pybind11_add_module(
             IrisCodecEncoderPython
             $<TARGET_OBJECTS:IrisFileExtensionLib>
@@ -396,6 +394,9 @@ if(IRIS_BUILD_PYTHON)
             PRIVATE IrisHeaders
             PRIVATE ${IrisCodecEncoderDependencies}
         )
+        if (DICOM_EXTERNAL_PROJECT_ADD)
+            add_dependencies(IrisCodecEncoderPython libdicom)
+        endif()
         install(
             TARGETS IrisCodecEncoderPython
             DESTINATION ${IRIS_INSTALL_PYTHON_LIBDIR}/Iris/Encoder
