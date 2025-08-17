@@ -16,11 +16,13 @@ class __INTERNAL__Encoder {
         ENCODER_SOURCE_UNDEFINED    = 0,
         ENCODER_SOURCE_FILE,
         ENCODER_SOURCE_CACHE
-    }                               _srcType    = ENCODER_SOURCE_UNDEFINED;
+    }                               _srcType        = ENCODER_SOURCE_UNDEFINED;
+    unsigned                        _concurrency    = std::thread::hardware_concurrency();
     bool                            _derive;
     const Context                   _context;
     std::string                     _srcPath;
     std::string                     _dstPath;
+    bool                            _anonymize;
     Encoding                        _encoding;
     EncoderDerivation               _derivation;
     Threads                         _threads;
@@ -46,8 +48,6 @@ public:
     Result  reset_encoder           ();
     Result  dispatch_encoder        ();
     Result  interrupt_encoder       ();
-private:
-    void    encode_derived_tile     (uint32_t,uint32_t,uint32_t);
 };
 } // END IRIS CODEC NAMESPACE
 #endif /* IrisCodecEncoder_hpp */

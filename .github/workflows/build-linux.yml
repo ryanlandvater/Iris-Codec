@@ -37,7 +37,6 @@ jobs:
         echo "build-output-dir=${{ github.workspace }}/build" >> "$GITHUB_OUTPUT"
         echo "install-dir=${{ github.workspace }}/${{ inputs.artifact }}" >> "$GITHUB_OUTPUT"
 
-
     - name: Configure Jpeg-Turbo PPA
       run: |
         sudo wget -q https://packagecloud.io/dcommander/libjpeg-turbo/gpgkey -O /etc/apt/trusted.gpg.d/libjpeg-turbo &&
@@ -48,8 +47,12 @@ jobs:
     
     - name: Fetch Dependencies
       run: |
-        sudo apt install libhwy-dev libjpeg-turbo-official libavif-dev libpng-dev zlib1g-dev openslide-tools python3-dev -y
-
+        sudo apt install libhwy-dev \
+        libjpeg-turbo-official \
+        libavif-dev libpng-dev \
+        zlib1g-dev openslide-tools \
+        python3-dev \
+        meson ninja-build -y
     
     - name: Configure CMake
       run: >
