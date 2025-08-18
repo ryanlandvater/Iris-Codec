@@ -18,17 +18,25 @@ jobs:
         - uses: actions/setup-python@v5
         
         - name: Update Pip
+          shell: bash
           run: |
             python -m pip install --upgrade pip 
-            pip install build scikit-build-core
+            pip install build scikit-build-core setuptools-scm
         - name: Build Self-contained Python Module
+          shell: bash
           run: |
-            python -m build ${{ github.workspace }} -s
+            if [ "${{ github.event_name }}" == "release" ]; then
+              VERSION=${{ github.event.release.tag_name }}
+              VERSION=${VERSION#v}
+              SETUPTOOLS_SCM_PRETEND_VERSION="$VERSION" python -m build . -s
+            else
+              SETUPTOOLS_SCM_PRETEND_VERSION="0.0.0" python -m build . -s
+            fi
         - name: Upload Build Artifact
           uses: actions/upload-artifact@v4
           with:
             name: source
-            path: ${{ github.workspace }}/dist
+            path: ./dist
 
   build_non_linux_python_module:
     runs-on: ${{ matrix.os }}
@@ -43,19 +51,28 @@ jobs:
           - uses: actions/setup-python@v5
             with:
                 python-version: ${{ matrix.python }}
+              
           - name: Update Pip
+            shell: bash
             run: |
                 python -m pip install --upgrade pip 
-                pip install build scikit-build-core meson ninja
+                pip install build scikit-build-core meson ninja setuptools-scm
 
           - name: Build Self-contained Python Module
+            shell: bash
             run: |
-                python -m build ${{ github.workspace }}
+                if [ "${{ github.event_name }}" == "release" ]; then
+                  VERSION=${{ github.event.release.tag_name }}
+                  VERSION=${VERSION#v}
+                  SETUPTOOLS_SCM_PRETEND_VERSION="$VERSION" python -m build .
+                else
+                  SETUPTOOLS_SCM_PRETEND_VERSION="0.0.0" python -m build .
+                fi
           - name: Upload Build Artifact
             uses: actions/upload-artifact@v4
             with:
                 name: ${{ matrix.os }}-${{ matrix.python }}
-                path: ${{ github.workspace }}/dist
+                path: ./dist
 
   build_many_linux_python_module:
     runs-on: ${{ matrix.os }}
@@ -71,9 +88,10 @@ jobs:
           - uses: actions/setup-python@v5
 
           - name: Update Pip
+            shell: bash
             run: |
                 python -m pip install --upgrade pip 
-                pip install scikit-build-core uv cibuildwheel
+                pip install scikit-build-core uv cibuildwheel setuptools-scm
 
           - name: Build Self-contained Python Module
             env:
@@ -85,13 +103,20 @@ jobs:
                 CIBW_MANYLINUX_PYPY_X86_64_IMAGE: quay.io/pypa/manylinux_2_34_x86_64
                 CIBW_MANYLINUX_PYPY_AARCH64_IMAGE: quay.io/pypa/manylinux_2_34_aarch64
                 CIBW_REPAIR_WHEEL_COMMAND_LINUX: "auditwheel repair -w {dest_dir} {wheel} --exclude libopenslide.so.*"
+            shell: bash
             run: |
-                python -m cibuildwheel ${{ github.workspace }}
+                if [ "${{ github.event_name }}" == "release" ]; then
+                  VERSION=${{ github.event.release.tag_name }}
+                  VERSION=${VERSION#v}
+                  SETUPTOOLS_SCM_PRETEND_VERSION="$VERSION" python -m cibuildwheel .
+                else
+                  SETUPTOOLS_SCM_PRETEND_VERSION="0.0.0" python -m cibuildwheel .
+                fi
           - name: Upload Build Artifact
             uses: actions/upload-artifact@v4
             with:
                 name: ${{ matrix.os }}-${{matrix.python}}
-                path: ${{ github.workspace }}/wheelhouse
+                path: ./wheelhouse
 
   upload_to_pypi:
         if: github.event_name == 'release'
@@ -106,15 +131,8 @@ jobs:
         - name: Retrieve Build Artifact
           uses: actions/download-artifact@v4
           with:
-            path: ${{ github.workspace }}/dist
+            path: ./dist
             merge-multiple: true
-
-        - name: Set version from GitHub tag
-          working-directory: ${{ github.workspace }}
-          run: |
-            TAG=${{ github.event.release.tag_name }}
-            VERSION=${TAG#v}  # Strip leading 'v'
-            sed -i "s/^version = .*/version = \"$VERSION\"/" pyproject.toml
 
         - name: Publish to PyPi 
           uses: pypa/gh-action-pypi-publish@release/v1
