@@ -174,7 +174,7 @@ import createModule from 'https://cdn.jsdelivr.net/npm/iris-codec@latest/iris-co
   const slide = await irisCodec.openIrisSlide('https://example.com/slide.iris');
   const info = slide.getSlideInfo();
 })();
-
+```
 For complete examples and advanced usage, see the [full documentation](https://github.com/IrisDigitalPathology/Iris-Headers) and [API reference](https://github.com/IrisDigitalPathology/Iris-Headers/blob/main/include/IrisCodecCore.hpp).
 
 # Detailed API Documentation
