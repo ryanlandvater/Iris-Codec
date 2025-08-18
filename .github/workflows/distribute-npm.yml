@@ -45,5 +45,5 @@ jobs:
       - name: Install npm dependencies
         working-directory: javascript
         run: |
-          npm ci
+          npm install
           npm publish --access public
