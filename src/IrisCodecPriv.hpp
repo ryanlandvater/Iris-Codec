@@ -14,7 +14,7 @@
 #define CODEC_MINOR_VERSION 3
 #endif
 #ifndef CODEC_BUILD_NUMBER
-#define CODEC_BUILD_NUMBER  0
+#define CODEC_BUILD_NUMBER  1
 #endif
 #ifndef FLT16_MIN
 #define _Float16            float // use 32-bit if no 16
