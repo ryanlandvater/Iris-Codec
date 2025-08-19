@@ -8,6 +8,8 @@
 #include <filesystem>
 #include "IrisCodecPriv.hpp"
 
+// TODO: Make max pending memory a runtime configurable
+constexpr size_t MAX_MEMORY_PRESSURE = 2E9; // 2 GB
 
 namespace IrisCodec {
 inline void CHECK_ENCODER (const Encoder& encoder) {
@@ -695,7 +697,7 @@ inline static void ENCODE_SOURCE_PYRAMID (const Context ctx,
                 auto pixel_array = READ_SOURCE_TILE (ctx, src, __LI, __TI);
                 if (!pixel_array) throw std::runtime_error
                     ("Failed to read slide image data");
-                bytes = bytes      = ctx->compress_tile({
+                bytes           = ctx->compress_tile({
                     .pixelArray = pixel_array,
                     .format     = src.format,
                     .encoding   = table.encoding
@@ -1291,7 +1293,7 @@ Result __INTERNAL__Encoder::dispatch_encoder()
                         auto& queue = downsample_info.queue;
                         // If the queue has more than 2GB pending...
                         // Slow the reads down to let the sampler keep up.
-                        while (queue->pending_tasks() > 2E9/TILE_PIX_BYTES_RGBA)
+                        while (queue->pending_tasks() > MAX_MEMORY_PRESSURE/TILE_PIX_BYTES_RGBA)
                             std::this_thread::sleep_for(std::chrono::milliseconds(1));
                         downsample_info.queue->issue_task
                         (std::bind(ENCODE_DERIVED_TILE ,downsample_info,

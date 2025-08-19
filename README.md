@@ -51,6 +51,7 @@ The Iris Codec encoder converts WSI files from various vendor formats into optim
 [![Ubuntu CI](https://img.shields.io/github/actions/workflow/status/IrisDigitalPathology/Iris-Codec/cmake-linux-CI.yml?style=for-the-badge&logo=github&label=Ubuntu)](https://github.com/IrisDigitalPathology/Iris-Codec/actions/workflows/cmake-linux-CI.yml)
 [![Windows CI](https://img.shields.io/github/actions/workflow/status/IrisDigitalPathology/Iris-Codec/cmake-win64-CI.yml?style=for-the-badge&logo=github&label=Windows)](https://github.com/IrisDigitalPathology/Iris-Codec/actions/workflows/cmake-win64-CI.yml)
 
+**Basic Build:**
 ```shell
 git clone --depth 1 https://github.com/IrisDigitalPathology/Iris-Codec.git
 cmake -B build -D IRIS_BUILD_SHARED=ON -D IRIS_BUILD_ENCODER=ON ./Iris-Codec
@@ -58,6 +59,18 @@ cmake --build build --config Release -j$(nproc)
 cmake --install build
 ```
 
+### Build Configuration Options
+
+The build system provides several configurable options to customize your build:
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `IRIS_BUILD_SHARED` | `ON` | Build shared library (.so/.dylib/.dll) |
+| `IRIS_BUILD_STATIC` | `ON` | Build static library (.a/.lib) |
+| `IRIS_BUILD_ENCODER` | `ON` | Build the encoder executable for converting WSI files |
+| `IRIS_BUILD_PYTHON` | `OFF` | Build Python bindings |
+| `IRIS_BUILD_DEPENDENCIES` | `OFF` | Build all dependencies from source and statically link |
+| `IRIS_USE_OPENSLIDE` | `ON` | Enable OpenSlide support (required for most WSI formats) |
 
 ## Python
 [![Conda Version](https://img.shields.io/conda/vn/conda-forge/iris-codec.svg?style=for-the-badge&logo=anaconda)](https://anaconda.org/conda-forge/iris-codec) 
@@ -129,11 +142,8 @@ result = Encoder.encode_slide_file('input.svs', './output/')
 
 **C++:**
 ```cpp
-#include <IrisCodecCore.hpp>
-IrisCodec::EncodeSlideInfo encodeInfo;
-encodeInfo.srcFilePath = "input.svs";
-encodeInfo.dstDirectoryPath = "./output/";
-auto encoder = IrisCodec::create_encoder(encodeInfo);
+#include "IrisCodecCore.hpp"
+auto encoder = IrisCodec::create_encoder({.srcFilePath = "input.svs"});
 IrisCodec::dispatch_encoder(encoder);
 ```
 
@@ -141,17 +151,17 @@ IrisCodec::dispatch_encoder(encoder);
 
 **C++:**
 ```cpp
-#include <IrisCodecCore.hpp>
+#include <Iris/IrisCodecCore.hpp>
 
-auto slide = IrisCodec::open_slide({.filePath = "slide.iris"});
-IrisCodec::SlideInfo info;
-IrisCodec::get_slide_info(slide, info);
+auto slide = open_slide({.filePath = "slide.iris"});
+SlideInfo info;
+get_slide_info(slide, info);
 
 // Read tiles
-IrisCodec::Buffer tile = IrisCodec::read_slide_tile(IrisCodec::SlideTileReadInfo {
+Iris::Buffer tile = read_slide_tile(SlideTileReadInfo {
   .slide = slide,
-  .layerIndex = 0,
-  .tileIndex = 0
+  .layer = 0,
+  .tile = 0
 });
 ```
 
@@ -192,39 +202,38 @@ For complete examples and advanced usage, see the [full documentation](https://g
 // Import the Iris Codec header
 // This import includes the types header automatically
 #include <filesystem>
-#include <IrisCodecCore.hpp>
+#include <Iris/IrisCodecCore.hpp>
 ```
 
 You may choose to perform your own file system validations and recovery routines. Iris will, however catch all of these (and the main API methods are declared `noexcept`).
 
 ```cpp
 if (!std::filesystem::exists(file_path)) {
-    printf("%s file does not exist\n", file_path.string().c_str());
+    printf(file_path.string() + " file does not exist\n");
     return EXIT_FAILURE;
 }
-IrisCodec::Result fileCheck = IrisCodec::is_iris_codec_file(file_path.string());
-if (fileCheck.flag != Iris::IRIS_SUCCESS) {
-    printf("%s is not a valid Iris slide file\n", file_path.string().c_str());
+if (!is_iris_codec_file(file_path.string())) {
+    printf(file_path.string() + " is not a valid Iris slide file\n");
     return EXIT_FAILURE;
 }
-IrisCodec::Result result = IrisCodec::validate_slide(IrisCodec::SlideOpenInfo{
+IrisResult result = validate_slide(SlideOpenInfo{
     .filePath = file_path.string()
     // Default values for any undefined parameters
 });
 
-if (result.flag != Iris::IRIS_SUCCESS) {
-    printf("%s", result.message.c_str());
+if (result != IRIS_SUCCESS) {
+    printf(result.message);
     return EXIT_FAILURE;
 }
 ```
 
-Should a runtime error occur, it will be reported in the form of an `IrisCodec::Result` message, as seen in the `IrisCodec::Result validate_slide(const IrisCodec::SlideOpenInfo&) noexcept;` call.
+Should a runtime error occur, it will be reported in the form of an `IrisResult` message, as seen in the `IrisResult validate_slide(const SlideOpenInfo&) noexcept;` call.
 
 ### Opening and Reading Slides
 Successful loading of a slide file will return a valid `IrisCodec::Slide` object; failure will return a `nullptr`.
 
 ```cpp
-auto slide = IrisCodec::open_slide(IrisCodec::SlideOpenInfo{
+auto slide = open_slide(SlideOpenInfo{
     .filePath = file_path.string(),
     .context = nullptr,
     .writeAccess = false
@@ -232,53 +241,50 @@ auto slide = IrisCodec::open_slide(IrisCodec::SlideOpenInfo{
 if (!slide) return EXIT_FAILURE;
 ```
 
-Once opened, the slide `IrisCodec::SlideInfo` structure can be loaded using the `IrisCodec::Result get_slide_info(const IrisCodec::Slide&, IrisCodec::SlideInfo&) noexcept` call and used as an initialized structure containing all the information needed to navigate the slide file and read elements.
+Once opened, the slide `IrisCodec::SlideInfo` structure can be loaded using the `Result get_slide_info(const Slide&, SlideInfo&) noexcept` call and used as an initialized structure containing all the information needed to navigate the slide file and read elements.
 
 ```cpp
-IrisCodec::SlideInfo info;
-IrisCodec::Result result = IrisCodec::get_slide_info(slide, info);
-if (result.flag != Iris::IRIS_SUCCESS) {
-    printf("%s", result.message.c_str());
+SlideInfo info;
+IrisResult result = get_slide_info(slide, info);
+if (result != IRIS_SUCCESS) {
+    printf(result.message);
     return EXIT_FAILURE;
 }
 ```
 
 ### Reading Tile Data
-The `IrisCodec::SlideTileReadInfo` struct provides a simple mechanism for reading slide image data. The `info.extent` struct is extremely simple to navigate. Please refer to the `struct Extent` type in the [IrisTypes.hpp](https://github.com/IrisDigitalPathology/Iris-Headers/blob/main/include/IrisTypes.hpp) core header file for more information about slide extents.
+The `SlideTileReadInfo` struct provides a simple mechanism for reading slide image data. The `info.extent` struct is extremely simple to navigate. Please refer to the `struct Extent` type in the [IrisTypes.hpp](https://github.com/IrisDigitalPathology/Iris-Headers/blob/main/include/IrisTypes.hpp) core header file for more information about slide extents.
 
 ```cpp
-IrisCodec::SlideTileReadInfo read_info{
+struct SlideTileReadInfo read_info{
     .slide = slide,
-    .layerIndex = 0,
-    .optionalDestination = nullptr,
+    .layer = 0,
+    .optionalDestination = NULL, /*wrapper can go here*/
     .desiredFormat = Iris::FORMAT_R8G8B8A8,
 };
 for (auto& layer : info.extent.layers) {
     for (int y_index = 0; y_index < layer.yTiles; ++y_index) {
         for (int x_index = 0; x_index < layer.xTiles; ++x_index) {
-            // Calculate tile index
-            read_info.tileIndex = y_index * layer.xTiles + x_index;
-            
             // Read the tile slide tile
-            IrisCodec::Buffer rgba = IrisCodec::read_slide_tile(read_info);
+            Iris::Buffer rgba = read_slide_tile(read_info);
             
             // Do something with the tile pixel values in rgba
 
             // Do not worry about clean up;
-            // The IrisCodec::Buffer will deallocate it.
+            // The Iris::Buffer will deallocate it.
         }
     }
-    read_info.layerIndex++;
+    read_info.layer++;
 }
 ```
 > [!NOTE]
-> IrisCodec::Buffer is a reference counted buffer wrapper that can be safely copied will internally manage the memory lifetime. If externally managing memory you can wrap an existing buffer in a weak IrisCodec::Buffer for API compatability but without lifetime management. 
+> Iris::Buffer is a reference counted buffer wrapper that can be safely copied will internally manage the memory lifetime. If externally managing memory you can wrap an existing buffer in a weak Iris::Buffer for API compatability but without lifetime management. 
 
 ### Advanced Memory Management
 Decompressed slide data can be optionally read into preallocated memory. If the optional destination buffer is insufficiently sized, Iris will instead allocate a new buffer and return that new buffer with the pixel data.
 
 > [!NOTE]
-> If writing into externally managed memory, `IrisCodec::Buffer` should weakly reference the underlying memory using `Iris::Wrap_weak_buffer_fom_data()` as strongly referenced `IrisCodec::Buffer` objects deallocate underlying memory when they pass out of scope.
+> If writing into externally managed memory, `Iris::Buffer` should weakly reference the underlying memory using `Wrap_weak_buffer_from_data()` as strongly referenced `Iris::Buffer` objects deallocate underlying memory when they pass out of scope.
 
 ```cpp
 // In this example we have some preallocated buffer we want
@@ -289,17 +295,15 @@ char* GPU_DST;
 // We will write in R8G8B8A8 format for simplicity
 Iris::Format format = Iris::FORMAT_R8G8B8A8;
 size_t tile_bytes = 256*256*4; 
-IrisCodec::Buffer wrapper = Iris::Wrap_weak_buffer_fom_data(GPU_DST, tile_bytes);
+Iris::Buffer wrapper = Wrap_weak_buffer_from_data(GPU_DST, tile_bytes);
 
 // Read the data
-IrisCodec::SlideTileReadInfo read_info{
+struct SlideTileReadInfo read_info{
     .slide = slide,
-    .layerIndex = 0,
-    .tileIndex = 0,
     .optionalDestination = wrapper,
     .desiredFormat = format,
 };
-IrisCodec::Buffer result = IrisCodec::read_slide_tile(read_info);
+Buffer result = read_slide_tile(read_info);
 
 // If there was insufficient space in the provided
 // destination buffer, a new buffer will be allocated.
@@ -336,7 +340,7 @@ Perform a deep validation of the slide file structure. This will navigate the in
 ```python
 result = Codec.validate_slide_path(slide_path)
 if (result.success() == False):
-    raise Exception(f'Invalid slide file path: {result.message}')
+    raise Exception(f'Invalid slide file path: {result.message()}')
 print(f"Slide file '{slide_path}' successfully passed validation")
 ```
 
@@ -355,7 +359,7 @@ Get the slide abstraction, read off the slide dimensions, and then print it to t
 # Get the slide abstraction
 result, info = slide.get_info()
 if (result.success() == False):
-    raise Exception(f'Failed to read slide information: {result.message}')
+    raise Exception(f'Failed to read slide information: {result.message()}')
 
 # Print the slide extent to the console
 extent = info.extent
@@ -390,7 +394,7 @@ Investigate the metadata attribute array and view a thumbnail image:
 ```python
 result, info = slide.get_info()
 if (result.success() == False):
-    raise Exception(f'Failed to read slide information: {result.message}')
+    raise Exception(f'Failed to read slide information: {result.message()}')
 
 print("Slide metadata attributes")
 for attribute in info.metadata.attributes:
@@ -411,12 +415,12 @@ from Iris import Encoder
 
 # Simple encoding with default settings
 result = Encoder.encode_slide_file(
-    source='path/to/input.dcm',
+    source='path/to/input.svs',
     outdir='./output/'
 )
 
 if not result.success():
-    raise Exception(f'Encoding failed: {result.message}')
+    raise Exception(f'Encoding failed: {result.message()}')
 print('Encoding completed successfully!')
 ```
 
@@ -426,7 +430,7 @@ from Iris import Encoder, Codec, iris_core
 
 # Encode with custom parameters
 result = Encoder.encode_slide_file(
-    source='path/to/input.dcm',
+    source='path/to/input.svs',
     outdir='./output/',
     desired_encoding=Codec.Encoding.TILE_ENCODING_AVIF,  # Use AVIF compression
     desired_byte_format=iris_core.Format.FORMAT_R8G8B8A8,  # RGBA format
@@ -438,7 +442,7 @@ result = Encoder.encode_slide_file(
 
 **DICOM Encoding with Progress Monitoring:**
 ```python
-from Iris import Encoder, Codec
+from Iris import Encoder
 import time
 
 # The encode_slide_file function includes built-in progress monitoring
@@ -446,7 +450,7 @@ import time
 result = Encoder.encode_slide_file(
     source='sample.dcm',  # DICOM input with byte-stream preservation
     outdir='./encoded/',
-    desired_encoding=Codec.Encoding.TILE_ENCODING_JPEG
+    desired_encoding=Encoder.Codec.Encoding.TILE_ENCODING_JPEG
 )
 
 # The function handles progress display automatically:

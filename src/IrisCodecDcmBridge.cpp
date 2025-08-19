@@ -1,6 +1,6 @@
 /**
  * @file IrisCodecDcmBridge.cpp
- * @author your name (you@domain.com)
+ * @author Ryan Landvater (ryanlandvater [at] gmail [dot] com)
  * @brief
  * @version 0.1
  * @date 2025-08-16
@@ -489,7 +489,7 @@ DcmFile open_dicom_file(const std::filesystem::path& filePath) {
         if (!dcm_filehandle_prepare_read_frame(&error, l_it->handle)) {
             std::cout   << "[WARNING] DICOM level " << l_it->filePath
                         << "level unable to generate frame offset table ("
-                        << error
+                        << dcm_error_get_message(error)
                         << "). Removing level.\n";
             levels.erase(l_it);
             dcm_error_clear(&error);
