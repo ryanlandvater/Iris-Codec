@@ -44,7 +44,7 @@
 #include "IrisBuffer.hpp"
 #include "IrisQueue.hpp"
 #include "IrisAsync.hpp"
-#include "IrisCodecExtension.hpp"
+#include "IrisFileExtension.hpp"
 #include "IrisCodecPrivTypes.hpp"
 #include "IrisCodecFile.hpp"
 #include "IrisCodecContext.hpp"

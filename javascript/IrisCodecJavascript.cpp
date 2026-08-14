@@ -279,13 +279,13 @@ public:
 };
 emscripten::val _validateFileStructure(const std::string& url) {
     size_t file_size = get_file_size_async(url.c_str());
-    if (file_size < Serialization::FILE_HEADER::HEADER_SIZE)
+    if (file_size < Serialization::FILE_HEADER::header_size)
     {
         return emscripten::val
         (Result(Iris::IRIS_VALIDATION_FAILURE,
         "The hosted file is not an Iris slide file."));
     }
-    if (!confirm_range_support(url.c_str(), Serialization::FILE_HEADER::HEADER_SIZE))
+    if (!confirm_range_support(url.c_str(), Serialization::FILE_HEADER::header_size))
     {
         return emscripten::val
         (Result(Iris::IRIS_FAILURE,
@@ -295,9 +295,9 @@ emscripten::val _validateFileStructure(const std::string& url) {
 }
 emscripten::val _openSlide(const std::string& url) {
     size_t file_size = get_file_size_async(url.c_str());
-    if (file_size < Serialization::FILE_HEADER::HEADER_SIZE)
+    if (file_size < Serialization::FILE_HEADER::header_size)
         return emscripten::val();
-    if (!confirm_range_support(url.c_str(), Serialization::FILE_HEADER::HEADER_SIZE))
+    if (!confirm_range_support(url.c_str(), Serialization::FILE_HEADER::header_size))
         return emscripten::val();
     auto file = abstract_file_structure(url, file_size);
     return emscripten::val(std::make_shared<__INTERNAL__Slide>(url,file));

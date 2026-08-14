@@ -5,13 +5,53 @@
 //  Created by Ryan Landvater on 8/2/22.
 //
 #include <cmath>
+#include <cstring>
 #include <filesystem>
+#include <vector>
 #include "IrisCodecPriv.hpp"
 
 // TODO: Make max pending memory a runtime configurable
 constexpr size_t MAX_MEMORY_PRESSURE = 2E9; // 2 GB
 
 namespace IrisCodec {
+// The generated consumer API (IFE_Serialization.hpp): one namespace for the
+// whole write surface. Brought in so the retired bare sentinels (NULL_OFFSET)
+// keep resolving; the writers below are migrated to its store()/size_of().
+using namespace Serialization;
+
+// The generated writers report failures as a Status; this encoder's contract
+// is exceptions, so convert at the API boundary.
+[[noreturn]] inline void THROW_IF_FAILED (const Status& status, const char* what) {
+    throw std::runtime_error(std::string(what) + " failed: " +
+                             status.block + "." + status.field + " (check code " +
+                             std::to_string(static_cast<int>(status.code)) + ")");
+}
+
+// The generated layer's ImageEntry.ORIENTATION is the decoded float; the
+// codec's ImageOrientation enum carries IEEE binary16 bits. Decode.
+inline float HALF_TO_FLOAT (const uint16_t half) noexcept {
+    const uint32_t sign = uint32_t(half & 0x8000u) << 16;
+    const uint32_t exp  = (half >> 10) & 0x1Fu;
+    const uint32_t man  = half & 0x3FFu;
+    uint32_t bits;
+    if (exp == 0) {
+        if (man == 0) bits = sign;
+        else {
+            int e = -1;
+            uint32_t m = man;
+            do { ++e; m <<= 1; } while ((m & 0x400u) == 0);
+            bits = sign | uint32_t(127 - 15 - e) << 23 | (m & 0x3FFu) << 13;
+        }
+    } else if (exp == 0x1Fu) {
+        bits = sign | 0x7F800000u | (man << 13);
+    } else {
+        bits = sign | uint32_t(exp - 15 + 127) << 23 | (man << 13);
+    }
+    float out;
+    std::memcpy(&out, &bits, sizeof out);
+    return out;
+}
+
 inline void CHECK_ENCODER (const Encoder& encoder) {
     if (!encoder)               throw std::runtime_error ("No valid encoder provided");
 }
@@ -852,51 +892,60 @@ inline Offset STORE_TILE_TABLE (const File& file, const Abstraction::TileTable& 
     if (table.layers.size() != table.extent.layers.size())
         throw std::runtime_error("Failure in tile ptr encoding; table does not match slide extent.");
     
-    uint32_t    n_layers    = U32_CAST(table.layers.size());
-    auto        __base      = file->ptr;
+    auto __base = file->ptr;
     // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     // SLIDE TILE ARRAY SERIALIZATION
     // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    auto    tiles_size      = Serialization::SIZE_TILE_OFFSETS(table.layers);
-    Offset  tiles_offset    = offset.fetch_add(tiles_size);
-    __base                  = FILE_CHECK_EXPAND(file, offset); // Always check bounds before writing
-    Serialization::STORE_TILE_OFFSETS (__base, tiles_offset, table.layers);
+    // The generated API takes one flat entry array; flatten the per-layer
+    // tile lists into it.
+    std::vector<TileOffsetEntry> tile_entries;
+    for (auto&& layer : table.layers)
+        for (auto&& tile : layer)
+            tile_entries.push_back({tile.offset, tile.size});
+    auto   tiles_size   = size_of(TileOffsetsCreateInfo{tile_entries});
+    Offset tiles_offset = offset.fetch_add(tiles_size);
+    __base              = FILE_CHECK_EXPAND(file, offset); // Always check bounds before writing
+    THROW_IF_FAILED(store(__base, tiles_offset, TileOffsetsCreateInfo{tile_entries}), "STORE_TILE_OFFSETS");
     
     // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     // SLIDE TILE EXTENT SERIALIZATION
     // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     // Write Iris::Extent to file
     // This must be written backwards as an array of layer extents
-    auto   l_extents_size   = Serialization::SIZE_EXTENTS(table.extent.layers);
+    std::vector<LayerExtentEntry> extent_entries;
+    for (auto&& layer : table.extent.layers)
+        // Z_PLANES is the 1.1-appended field; zero = single plane, which is
+        // all this v1-era encoder knows how to express.
+        extent_entries.push_back({layer.xTiles, layer.yTiles, layer.scale, 0});
+    auto   l_extents_size = size_of(LayerExtentsCreateInfo{extent_entries});
     Offset l_extents_offset = offset.fetch_add(l_extents_size);
     __base                  = FILE_CHECK_EXPAND(file, offset);
-    Serialization::STORE_EXTENTS (__base, l_extents_offset, table.extent.layers);
+    THROW_IF_FAILED(store(__base, l_extents_offset, LayerExtentsCreateInfo{extent_entries}), "STORE_EXTENTS");
     
     // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     // WRITE THE TILE TABLE HEADER
     // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    //
-    auto    ttable_size     = Serialization::TILE_TABLE::HEADER_SIZE;
+    auto    ttable_size     = TILE_TABLE::header_size;
     Offset  ttable_offset   = offset.fetch_add(ttable_size);
     __base                  = FILE_CHECK_EXPAND(file, offset);
-    Serialization::TileTableCreateInfo tile_table_create_info {
-        .tileTableOffset    = ttable_offset,
-        .encoding           = table.encoding,
-        .format             = table.format,
-        .tilesOffset        = tiles_offset,
-        .layerExtentsOffset = l_extents_offset,
-        .layers             = n_layers,
-        .widthPixels        = table.extent.width,
-        .heightPixels       = table.extent.height,
-    };
-    Serialization::STORE_TILE_TABLE (__base, tile_table_create_info);
+    THROW_IF_FAILED(store(__base, ttable_offset, TileTableCreateInfo {
+        .ENCODING            = static_cast<TileEncodings>(table.encoding),
+        .FORMAT              = static_cast<PixelFormats>(table.format),
+        .TILE_OFFSETS_OFFSET = tiles_offset,
+        .LAYER_EXTENTS_OFFSET = l_extents_offset,
+        .X_EXTENT            = table.extent.width,
+        .Y_EXTENT            = table.extent.height,
+        // TILE_LENGTH is the 1.1-appended field; the abstraction carries the
+        // slide's tile edge length (256 unless a file said otherwise).
+        .TILE_LENGTH         = table.tileLength,
+    }), "STORE_TILE_TABLE");
     
     // Return the Tile Table Offset
     return ttable_offset;
 }
 inline Offset RESERVE_METADATA (const File& file, atomic_uint64& offset)
 {
-    auto    metadata_size   = Serialization::METADATA::HEADER_SIZE;
+    auto    metadata_size   = METADATA::header_size;
     Offset  metadata_offset = offset.fetch_add(metadata_size);
     FILE_CHECK_EXPAND(file, offset);
     return  metadata_offset;
@@ -933,10 +982,14 @@ inline Offset STORE_ICC (const File& file,
     if (metadata.ICC_profile.size() == 0) return NULL_OFFSET;
     
     // Get bytes size and write ICC profile to byte stream
-    Size profile_size       = Serialization::SIZE_ICC_COLOR_PROFILE(metadata.ICC_profile);
+    Size profile_size       = size_of(IccProfileCreateInfo{
+        reinterpret_cast<const BYTE*>(metadata.ICC_profile.data()),
+        metadata.ICC_profile.size()});
     Offset profile_offset   = offset.fetch_add(profile_size);
     auto   __base           = FILE_CHECK_EXPAND(file, offset);
-    Serialization::STORE_ICC_COLOR_PROFILE(__base, profile_offset, metadata.ICC_profile);
+    THROW_IF_FAILED(store(__base, profile_offset, IccProfileCreateInfo{
+        reinterpret_cast<const BYTE*>(metadata.ICC_profile.data()),
+        metadata.ICC_profile.size()}), "STORE_ICC_COLOR_PROFILE");
     
     // Return the byte location of the ICC profile
     return profile_offset;
@@ -952,7 +1005,8 @@ inline Offset STORE_ASSOCIATED_IMAGES (const Context& ctx,
     if (metadata.associatedImages.size() == 0) return NULL_OFFSET;
     
     // Otherwise begin encoding images
-    Serialization::AssociatedImageCreateInfo associated_images;
+    // The array of associated image entries; one per label, filled below.
+    std::vector<ImageEntry> image_entries;
     
     // Encode each of the associated image variable byte blocks
     // This corresponds with IFE Specification Section 2.4.7
@@ -991,21 +1045,25 @@ inline Offset STORE_ASSOCIATED_IMAGES (const Context& ctx,
                 ("no bytes given for image buffer byte size");
             
             // Store the data-block 1) get size 2) write to the stream 3) record location
-            Size block_size         = Serialization::SIZE_IMAGES_BYTES({
-                .title              = label,
-                .dataBytes          = bytes->size()
-            });
+            // The generated store writes the block header only; the ASCII
+            // label and compressed stream follow it.
+            const Size block_size   = IMAGE_BYTES::header_size +
+                                      label.size() + bytes->size();
             Offset block_offset     = offset.fetch_add(block_size);
             auto   __base           = FILE_CHECK_EXPAND(file, offset);
-            Serialization::STORE_IMAGES_BYTES(__base, {
-                .offset             = block_offset,
-                .title              = label,
-                .data               = (BYTE*)bytes->data(),
-                .dataBytes          = bytes->size()
-            });
-            associated_images.images.push_back({
-                .offset             = block_offset,
-                .info               = info
+            THROW_IF_FAILED(store(__base, block_offset, ImageBytesCreateInfo{
+                U16_CAST(label.size()), U32_CAST(bytes->size())}), "STORE_IMAGES_BYTES");
+            BYTE* __ptr             = __base + block_offset + IMAGE_BYTES::header_size;
+            std::memcpy(__ptr, label.data(), label.size());
+            std::memcpy(__ptr + label.size(), (BYTE*)bytes->data(), bytes->size());
+            
+            image_entries.push_back({
+                block_offset,
+                info.width,
+                info.height,
+                static_cast<ImageEncodings>(info.encoding),
+                static_cast<PixelFormats>(info.sourceFormat),
+                HALF_TO_FLOAT(info.orientation)
             });
             
         } catch (std::runtime_error &error) {
@@ -1016,11 +1074,10 @@ inline Offset STORE_ASSOCIATED_IMAGES (const Context& ctx,
     }
     
     // Now record of all associated images to the byte stream
-    Size   images_size              = Serialization::SIZE_IMAGES_ARRAY(associated_images);
+    Size   images_size              = size_of(ImagesCreateInfo{image_entries});
     Offset images_offset            = offset.fetch_add(images_size);
-    associated_images.offset        = images_offset;
     auto   __base                   = FILE_CHECK_EXPAND(file, offset);
-    Serialization::STORE_IMAGES_ARRAY(__base, associated_images);
+    THROW_IF_FAILED(store(__base, images_offset, ImagesCreateInfo{image_entries}), "STORE_IMAGES_ARRAY");
     
     // Return the images array offset
     return images_offset;
@@ -1057,29 +1114,37 @@ inline Offset STORE_ATTRIBUTES (const File& file,
     // 2) Bytes
     // 3) Attributes header
     
+    // Build the attribute pairs once; the generated writer derives both the
+    // sizes array and the packed key/value byte run from them, so the
+    // slicing cannot drift from the bytes it describes.
+    std::vector<std::pair<std::string, std::string>> attr_pairs;
+    attr_pairs.reserve(attributes.size());
+    for (auto&& [key, value] : attributes)
+        attr_pairs.emplace_back(key, std::string(
+            reinterpret_cast<const char*>(value.data()), value.size()));
+    
     // Store the attributes sizes (how to slice up the char byte blob)
     // Sections 2.2.4
-    Size sizes_size     = Serialization::SIZE_ATTRIBUTES_SIZES(attributes);
+    Size sizes_size     = size_of(AttributeSizesCreateInfo{attr_pairs});
     Offset sizes_offset = offset.fetch_add(sizes_size);
     auto  __base        = FILE_CHECK_EXPAND(file, offset);
-    Serialization::STORE_ATTRIBUTES_SIZES(__base, sizes_offset, attributes);
+    THROW_IF_FAILED(store(__base, sizes_offset, AttributeSizesCreateInfo{attr_pairs}), "STORE_ATTRIBUTES_SIZES");
     
     // Store the raw attributes characters byte-blob
     // Section 2.2.5
-    Size bytes_size     = Serialization::SIZE_ATTRIBUTES_BYTES(attributes);
+    Size bytes_size     = size_of(AttributeBytesCreateInfo{attr_pairs});
     Offset bytes_offset = offset.fetch_add(bytes_size);
     __base              = FILE_CHECK_EXPAND(file, offset);
-    Serialization::STORE_ATTRIBUTES_BYTES(__base, bytes_offset, attributes);
+    THROW_IF_FAILED(store(__base, bytes_offset, AttributeBytesCreateInfo{attr_pairs}), "STORE_ATTRIBUTES_BYTES");
     
-    // Store the annotation header
-    Offset attr_offset  = offset.fetch_add(Serialization::ATTRIBUTES::HEADER_SIZE);
-    Serialization::STORE_ATTRIBUTES(__base, {
-        .attributesOffset   = attr_offset,
-        .type               = attributes.type,
-        .version            = attributes.version,
-        .sizes              = sizes_offset,
-        .bytes              = bytes_offset
-    });
+    // Store the attributes header
+    Offset attr_offset  = offset.fetch_add(ATTRIBUTES::header_size);
+    THROW_IF_FAILED(store(__base, attr_offset, AttributesCreateInfo{
+        .FORMAT       = static_cast<MetadataFormats>(attributes.type),
+        .VERSION      = attributes.version,
+        .SIZES_OFFSET = sizes_offset,
+        .BYTES_OFFSET = bytes_offset
+    }), "STORE_ATTRIBUTES");
     
     return attr_offset;
 }
@@ -1091,16 +1156,17 @@ inline void STORE_METADATA (const File& file,
                             const Offset attributes_offset,
                             const Offset annotations_offset)
 {
-    Serialization::STORE_METADATA(file->ptr, {
-        .metadataOffset     = metadata_offset,
-        .codecVersion       = metadata.codec,
-        .attributes         = attributes_offset,
-        .images             = images_offset,
-        .ICC_profile        = ICC_offset,
-        .annotations        = annotations_offset,
-        .micronsPerPixel    = metadata.micronsPerPixel,
-        .magnification      = metadata.magnification
-    });
+    THROW_IF_FAILED(store(file->ptr, metadata_offset, MetadataCreateInfo{
+        .CODEC_MAJOR        = U16_CAST(metadata.codec.major),
+        .CODEC_MINOR        = U16_CAST(metadata.codec.minor),
+        .CODEC_BUILD        = U16_CAST(metadata.codec.build),
+        .ATTRIBUTES_OFFSET  = attributes_offset,
+        .IMAGES_OFFSET      = images_offset,
+        .ICC_COLOR_OFFSET   = ICC_offset,
+        .ANNOTATIONS_OFFSET = annotations_offset,
+        .MICRONS_PIXEL      = metadata.micronsPerPixel,
+        .MAGNIFICATION      = metadata.magnification
+    }), "STORE_METADATA");
 }
 inline void STORE_FILE_HEADER (const File& file,
                                const Size file_size,
@@ -1110,12 +1176,15 @@ inline void STORE_FILE_HEADER (const File& file,
 {
     if (file->size < file_size) throw std::runtime_error
         ("[ERROR] File failed size check. Attempting to write header for truncated file.");
-    Serialization::STORE_FILE_HEADER(file->ptr, {
-        .fileSize           = file_size,
-        .revision           = revision,
-        .tileTableOffset    = tile_table_offset,
-        .metadataOffset     = metadata_offset
-    });
+    // EXTENSION_MAJOR/MINOR default to the schema version this build writes:
+    // the generated store always lays out the newest fields, so the file must
+    // claim the version its bytes actually have.
+    THROW_IF_FAILED(store(file->ptr, 0, FileHeaderCreateInfo{
+        .FILE_SIZE         = file_size,
+        .FILE_REVISION     = revision,
+        .TILE_TABLE_OFFSET = tile_table_offset,
+        .METADATA_OFFSET   = metadata_offset
+    }), "STORE_FILE_HEADER");
     resize_file(file, FileResizeInfo {
         .size               = file_size,
         .pageAlign          = false
@@ -1257,7 +1326,7 @@ Result __INTERNAL__Encoder::dispatch_encoder()
         }
         
         // Create the file byte offset tracker and reserve space for the footer
-        atomic_uint64 offset = Serialization::FILE_HEADER::HEADER_SIZE;
+        atomic_uint64 offset = FILE_HEADER::header_size;
         
         // Create the downsample information struct
         // WARNING: THIS MUST PERSIST UNTIL ALL ASYNC THREADS ARE COMPLETE

@@ -145,7 +145,7 @@ endif(IRIS_BUILD_ENCODER)
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Iris Codec Universal Object Build
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-set(IFE_SOURCE_DIR ${irisfileextension_SOURCE_DIR}/src)
+set(IFE_SOURCE_DIR ${irisfileextension_SOURCE_DIR}/include)
 set(CODEC_SOURCE_DIR ${PROJECT_SOURCE_DIR}/src)
 set (
     IrisCodecSources
@@ -166,6 +166,10 @@ set (
     IrisCodecInclude
     ${CODEC_SOURCE_DIR}
     ${IFE_SOURCE_DIR}
+    # IFE's generated layer: the public umbrella includes IFE_Blocks.hpp and
+    # friends from generated_source/, which is not part of the include/
+    # layout — it is generated at IFE configure time.
+    ${irisfileextension_SOURCE_DIR}/generated_source
     ${glm_SOURCE_DIR}
     ${irisheaders_SOURCE_DIR}/priv
     ${vkmemoryallocator_SOURCE_DIR}/include
