@@ -47,15 +47,12 @@ jobs:
       fail-fast: true
 
       matrix:
-        os: [macos-latest, macos-13]
+        os: [macos-latest]
         build_type: [Release]
         include:
           - os: macos-latest
             name: macos
             arch: arm64
-          - os: macos-13
-            name: macos
-            arch: x86_64
 
     uses: ./.github/workflows/build-macos.yml
     with:

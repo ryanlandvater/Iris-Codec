@@ -88,7 +88,7 @@ message(STATUS "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Iris Codec Universal Object Build
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-set(IFE_SOURCE_DIR ${irisfileextension_SOURCE_DIR}/src)
+set(IFE_SOURCE_DIR ${irisfileextension_SOURCE_DIR}/include)
 add_executable(
     iris-codec
     $<TARGET_OBJECTS:IrisFileExtensionLib>
@@ -98,7 +98,10 @@ target_include_directories (
     iris-codec PRIVATE 
     ${irisheaders_SOURCE_DIR}/include
     ${irisheaders_SOURCE_DIR}/priv
-    ${IFE_SOURCE_DIR} 
+    ${IFE_SOURCE_DIR}
+    # The generated layer lives outside include/ and is generated at IFE
+    # configure time; the root CMakeLists carries the same two directories.
+    ${irisfileextension_SOURCE_DIR}/generated_source
 )
 if (CMAKE_BUILD_TYPE STREQUAL "Debug")
     target_link_options(
