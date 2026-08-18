@@ -18,6 +18,9 @@
 #include <emscripten/val.h>
 #include <string>
 #include <iostream>
+#include <algorithm>
+#include <cstdint>
+#include <vector>
 #include <sstream>
 #include <map>
 #include <set>
@@ -277,6 +280,73 @@ public:
         }
     }
 };
+/// Fetch the structural prefix of a hosted slide and shallow-validate it.
+///
+/// The generated runtime is bytes-only: validate_file_structure and
+/// abstract_file_structure take a flat buffer, and a hosted file is never
+/// fully resident. This fetches just the five blocks the abstraction requires
+/// (FILE_HEADER, TILE_TABLE, LAYER_EXTENTS, TILE_OFFSETS, METADATA) through
+/// IFE's own windowed fetch -- Window::remote + fetch_http_range, the same
+/// ranged transport v1 used, with the caching and bounds logic tested
+/// natively on IFE's side. The encoder lays every optional block after
+/// metadata, so their handles fall outside the prefix and the abstraction
+/// skips them; the Slide needs the tile table and metadata only.
+///
+/// On success `out` holds the prefix and `out_version` the file's declared
+/// version; returns false when a range could not be fetched.
+bool fetch_structural_prefix(const std::string& url, size_t file_size,
+                             std::vector<IFE::BYTE>& out, uint32_t& out_version) {
+    IFE::Window window = IFE::Window::remote(
+        static_cast<IFE::Size>(file_size), IFE::fetch_http_range,
+        const_cast<char*>(url.c_str()));
+
+    // Bootstrap the version the way the runtime does: every gate open for one
+    // block, then rebuild at the version the file declares.
+    const IFE::BYTE* header_page = window.map(0, Serialization::FILE_HEADER::header_size);
+    if (!header_page) return false;
+    const Serialization::FILE_HEADER bootstrap{
+        header_page, 0, static_cast<IFE::Size>(file_size), UINT32_MAX};
+    out_version = (static_cast<uint32_t>(bootstrap.extension_major()) << 16)
+                | bootstrap.extension_minor();
+
+    const IFE::BYTE* table_page = window.map(
+        bootstrap.tile_table_offset().__offset, Serialization::TILE_TABLE::header_size);
+    if (!table_page) return false;
+    const Serialization::TILE_TABLE table{
+        table_page, 0, static_cast<IFE::Size>(file_size), out_version};
+
+    const IFE::Offset extents_off  = table.layer_extents_offset().__offset;
+    const IFE::Offset offsets_off  = table.tile_offsets_offset().__offset;
+    const IFE::Offset metadata_off = bootstrap.metadata_offset().__offset;
+
+    // The counts size the two array blocks; each block's header page is
+    // enough to read its count.
+    const IFE::BYTE* extents_page = window.map(extents_off, Serialization::LAYER_EXTENTS::header_size);
+    const IFE::BYTE* offsets_page = window.map(offsets_off, Serialization::TILE_OFFSETS::header_size);
+    if (!extents_page || !offsets_page) return false;
+    const Serialization::LAYER_EXTENTS extents{
+        extents_page, 0, static_cast<IFE::Size>(file_size), out_version};
+    const Serialization::TILE_OFFSETS offsets{
+        offsets_page, 0, static_cast<IFE::Size>(file_size), out_version};
+
+    const IFE::Size prefix_end = std::max({
+        metadata_off + Serialization::METADATA::header_size,
+        extents_off + Serialization::LAYER_EXTENTS::header_size
+                    + static_cast<IFE::Size>(extents.count())
+                        * Serialization::LAYER_EXTENTS::LAYER_EXTENT::entry_size,
+        offsets_off + Serialization::TILE_OFFSETS::header_size
+                    + static_cast<IFE::Size>(offsets.count())
+                        * Serialization::TILE_OFFSETS::TILE_OFFSET::entry_size,
+    });
+
+    // One contiguous page covering the whole structural region; copied out
+    // because the Window owns the page and dies with this function.
+    const IFE::BYTE* prefix = window.map(0, prefix_end);
+    if (!prefix) return false;
+    out.assign(prefix, prefix + prefix_end);
+    return true;
+}
+
 emscripten::val _validateFileStructure(const std::string& url) {
     size_t file_size = get_file_size_async(url.c_str());
     if (file_size < Serialization::FILE_HEADER::header_size)
@@ -291,7 +361,41 @@ emscripten::val _validateFileStructure(const std::string& url) {
         (Result(Iris::IRIS_FAILURE,
         "The server hosting the slide file does not support Ranged Reads."));
     }
-    return emscripten::val(validate_file_structure(url, file_size));
+
+    std::vector<IFE::BYTE> prefix;
+    uint32_t version = 0;
+    if (!fetch_structural_prefix(url, file_size, prefix, version))
+        return emscripten::val
+        (Result(Iris::IRIS_FAILURE,
+        "Failed to fetch the hosted file's structural blocks from the remote endpoint."));
+
+    // Shallow structural validation over the prefix: the five blocks the
+    // abstraction requires, bounded by the full file size so tile data
+    // offsets -- which point past the prefix -- still validate. The tiles
+    // themselves are fetched on demand and validated at decode time.
+    const Serialization::FILE_HEADER header{
+        prefix.data(), 0, static_cast<IFE::Size>(file_size), version};
+    if (!header.validate())
+        return emscripten::val(Result(Iris::IRIS_VALIDATION_FAILURE,
+        "The hosted file's header failed validation."));
+    const auto table = header.tile_table_offset();
+    if (!table.validate())
+        return emscripten::val(Result(Iris::IRIS_VALIDATION_FAILURE,
+        "The hosted file's tile table failed validation."));
+    const auto extents = table.layer_extents_offset();
+    if (!extents.validate())
+        return emscripten::val(Result(Iris::IRIS_VALIDATION_FAILURE,
+        "The hosted file's layer extents failed validation."));
+    const auto offsets = table.tile_offsets_offset();
+    if (!offsets.validate())
+        return emscripten::val(Result(Iris::IRIS_VALIDATION_FAILURE,
+        "The hosted file's tile offsets failed validation."));
+    const auto metadata = header.metadata_offset();
+    if (!metadata.validate())
+        return emscripten::val(Result(Iris::IRIS_VALIDATION_FAILURE,
+        "The hosted file's metadata block failed validation."));
+
+    return emscripten::val(Result(Iris::IRIS_SUCCESS, ""));
 }
 emscripten::val _openSlide(const std::string& url) {
     size_t file_size = get_file_size_async(url.c_str());
@@ -299,7 +403,13 @@ emscripten::val _openSlide(const std::string& url) {
         return emscripten::val();
     if (!confirm_range_support(url.c_str(), Serialization::FILE_HEADER::header_size))
         return emscripten::val();
-    auto file = abstract_file_structure(url, file_size);
+
+    std::vector<IFE::BYTE> prefix;
+    uint32_t version = 0;
+    if (!fetch_structural_prefix(url, file_size, prefix, version))
+        throw std::runtime_error
+        ("Failed to fetch the hosted file's structural blocks from remote endpoint ("+url+")");
+    auto file = abstract_file_structure(prefix.data(), prefix.size());
     return emscripten::val(std::make_shared<__INTERNAL__Slide>(url,file));
 }
 } // END IRIS_CODEC

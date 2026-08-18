@@ -52,7 +52,15 @@ jobs:
         libavif-dev libpng-dev \
         zlib1g-dev openslide-tools \
         python3-dev \
-        meson ninja-build -y
+        meson ninja-build ccache -y
+
+    - name: Cache ccache
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/ccache
+        # ccache is content-addressed, so a static key is correct: restored
+        # objects hit only when the inputs are unchanged.
+        key: ccache-${{ runner.os }}
     
     - name: Check out Iris-File-Extension (this owner's fork if present, else upstream)
       # FetchContent pulls IrisDigitalPathology/Iris-File-Extension by default;
@@ -81,6 +89,7 @@ jobs:
         -D CMAKE_INSTALL_PREFIX=${{ steps.strings.outputs.install-dir }}
         -D CMAKE_PREFIX_PATH="$ENV{CMAKE_PREFIX_PATH};/opt/libjpeg-turbo/lib64/cmake/libjpeg-turbo/"
         -D TURBOJPEG_INCLUDE="/opt/libjpeg-turbo/include/"
+        -D CMAKE_CXX_COMPILER_LAUNCHER=ccache
         -D FETCHCONTENT_SOURCE_DIR_IRISFILEEXTENSION="${{ runner.temp }}/ife"
         ${{ inputs.iris_cmake_flags }}
 

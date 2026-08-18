@@ -31,7 +31,15 @@ jobs:
         echo "install-dir=${{ github.workspace }}/${{ inputs.artifact }}" >> "$GITHUB_OUTPUT"
 
     - name: Fetch Dependencies
-      run: brew install highway jpeg-turbo libavif openslide libpng meson ninja
+      run: brew install highway jpeg-turbo libavif openslide libpng meson ninja ccache
+
+    - name: Cache ccache
+      uses: actions/cache@v4
+      with:
+        path: ~/Library/Caches/ccache
+        # ccache is content-addressed, so a static key is correct: restored
+        # objects hit only when the inputs are unchanged.
+        key: ccache-${{ runner.os }}
 
     - name: Check out Iris-File-Extension (this owner's fork if present, else upstream)
       # FetchContent pulls IrisDigitalPathology/Iris-File-Extension by default;
@@ -56,6 +64,7 @@ jobs:
         -S ${{ github.workspace }}
         -D CMAKE_BUILD_TYPE=${{ inputs.build_type }}
         -D CMAKE_INSTALL_PREFIX=${{ steps.strings.outputs.install-dir }}
+        -D CMAKE_CXX_COMPILER_LAUNCHER=ccache
         -D FETCHCONTENT_SOURCE_DIR_IRISFILEEXTENSION="${{ runner.temp }}/ife"
         ${{ inputs.iris_cmake_flags }}
 

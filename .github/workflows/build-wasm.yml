@@ -11,13 +11,25 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
+      - name: Cache Emscripten SDK
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/emsdk
+          # 'latest' moves, so rotate the key daily and fall back to the
+          # previous day's install on a miss.
+          key: emsdk-${{ runner.os }}-${{ github.run_date }}
+          restore-keys: |
+            emsdk-${{ runner.os }}-
+
       - name: Setup Emscripten SDK
         run: |
-          git clone https://github.com/emscripten-core/emsdk.git \
-            ${{ github.workspace }}/emsdk
-          cd ${{ github.workspace }}/emsdk
-          git pull
-          ./emsdk  install latest
+          if [ ! -x "${{ github.workspace }}/emsdk/emsdk" ]; then
+            git clone https://github.com/emscripten-core/emsdk.git \
+              "${{ github.workspace }}/emsdk"
+            cd "${{ github.workspace }}/emsdk"
+            ./emsdk install latest
+          fi
+          cd "${{ github.workspace }}/emsdk"
           ./emsdk activate latest
         shell: bash
 

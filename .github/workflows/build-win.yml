@@ -45,11 +45,21 @@ jobs:
           core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
           core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
           
+    - name: Cache Vcpkg
+      uses: actions/cache@v4
+      with:
+        path: ${{ github.workspace }}/vcpkg
+        key: vcpkg-${{ runner.os }}-x64
+
     - name: Configure Vcpkg
-      run: >
-        git clone --depth 1 https://github.com/microsoft/vcpkg.git ${{ github.workspace }}\vcpkg && 
-        ${{ github.workspace }}\vcpkg\bootstrap-vcpkg.bat &&
-        ${{ github.workspace }}\vcpkg\vcpkg.exe install highway libjpeg-turbo libavif libpng --binarysource="clear;x-gha,readwrite"
+      run: |
+        if (-not (Test-Path "${{ github.workspace }}\vcpkg\vcpkg.exe")) {
+          git clone --depth 1 https://github.com/microsoft/vcpkg.git "${{ github.workspace }}\vcpkg"
+          & "${{ github.workspace }}\vcpkg\bootstrap-vcpkg.bat"
+        }
+        # Package binaries come from the x-gha binary cache below; only the
+        # clone and bootstrap are what the directory cache above avoids.
+        & "${{ github.workspace }}\vcpkg\vcpkg.exe" install highway libjpeg-turbo libavif libpng --binarysource="clear;x-gha,readwrite"
 
     - name: Install Meson
       run: |
