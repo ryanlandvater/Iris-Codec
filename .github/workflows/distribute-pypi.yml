@@ -63,6 +63,12 @@ jobs:
             # python module compiles against the fetched IFE, and the org's
             # main still carries the pre-move layout without
             # include/IrisFileExtension.hpp.
+            #
+            # IFE_FETCH_DIR is emitted in forward-slash form: CMAKE_ARGS goes
+            # through an escape-aware parse (shlex) on its way to CMake, which
+            # eats the backslashes of a native Windows path (D:\a\_temp became
+            # D:/a_temp and the source dir vanished). cygpath -m is Git Bash's
+            # forward-slash path conversion.
             shell: bash
             run: |
                 if git clone --depth 1 "https://github.com/${{ github.repository_owner }}/Iris-File-Extension.git" "${RUNNER_TEMP}/ife" && \
@@ -72,12 +78,17 @@ jobs:
                   rm -rf "${RUNNER_TEMP}/ife"
                   git clone --depth 1 "https://github.com/IrisDigitalPathology/Iris-File-Extension.git" "${RUNNER_TEMP}/ife"
                 fi
+                if command -v cygpath >/dev/null; then
+                  echo "IFE_FETCH_DIR=$(cygpath -m "${RUNNER_TEMP}")/ife" >> "$GITHUB_ENV"
+                else
+                  echo "IFE_FETCH_DIR=${RUNNER_TEMP}/ife" >> "$GITHUB_ENV"
+                fi
 
           - name: Build Self-contained Python Module
             env:
                 # scikit-build-core honours CMAKE_ARGS, the standard pip
                 # convention, and passes it to the CMake configure.
-                CMAKE_ARGS: -DFETCHCONTENT_SOURCE_DIR_IRISFILEEXTENSION=${{ runner.temp }}/ife
+                CMAKE_ARGS: -DFETCHCONTENT_SOURCE_DIR_IRISFILEEXTENSION=${{ env.IFE_FETCH_DIR }}
             shell: bash
             run: |
                 if [ "${{ github.event_name }}" == "release" ]; then
