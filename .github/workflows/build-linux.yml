@@ -54,6 +54,23 @@ jobs:
         python3-dev \
         meson ninja-build -y
     
+    - name: Check out Iris-File-Extension (this owner's fork if present, else upstream)
+      # FetchContent pulls IrisDigitalPathology/Iris-File-Extension by default;
+      # FETCHCONTENT_SOURCE_DIR_IRISFILEEXTENSION redirects it to this owner's
+      # fork when one exists, so a fork's CI tests the fork's IFE. The
+      # CMakeLists.txt probe makes a missing or empty fork fall back upstream.
+      shell: bash
+      run: |
+        if git clone --depth 1 "https://github.com/${{ github.repository_owner }}/Iris-File-Extension.git" "${RUNNER_TEMP}/ife" && \
+           [ -f "${RUNNER_TEMP}/ife/CMakeLists.txt" ]; then
+          echo "using ${{ github.repository_owner }}/Iris-File-Extension"
+        else
+          echo "no usable ${{ github.repository_owner }}/Iris-File-Extension" \
+               "(any clone error above is expected) - falling back to IrisDigitalPathology"
+          rm -rf "${RUNNER_TEMP}/ife"
+          git clone --depth 1 "https://github.com/IrisDigitalPathology/Iris-File-Extension.git" "${RUNNER_TEMP}/ife"
+        fi
+
     - name: Configure CMake
       run: >
         cmake -B ${{ steps.strings.outputs.build-output-dir }}
@@ -64,6 +81,7 @@ jobs:
         -D CMAKE_INSTALL_PREFIX=${{ steps.strings.outputs.install-dir }}
         -D CMAKE_PREFIX_PATH="$ENV{CMAKE_PREFIX_PATH};/opt/libjpeg-turbo/lib64/cmake/libjpeg-turbo/"
         -D TURBOJPEG_INCLUDE="/opt/libjpeg-turbo/include/"
+        -D FETCHCONTENT_SOURCE_DIR_IRISFILEEXTENSION="${{ runner.temp }}/ife"
         ${{ inputs.iris_cmake_flags }}
 
     - name: Build

@@ -21,11 +21,28 @@ jobs:
           ./emsdk activate latest
         shell: bash
 
+      - name: Check out Iris-File-Extension (this owner's fork if present, else upstream)
+        # FetchContent pulls IrisDigitalPathology/Iris-File-Extension by default;
+        # FETCHCONTENT_SOURCE_DIR_IRISFILEEXTENSION redirects it to this owner's
+        # fork when one exists, so a fork's CI tests the fork's IFE. The
+        # CMakeLists.txt probe makes a missing or empty fork fall back upstream.
+        shell: bash
+        run: |
+          if git clone --depth 1 "https://github.com/${{ github.repository_owner }}/Iris-File-Extension.git" "${RUNNER_TEMP}/ife" && \
+             [ -f "${RUNNER_TEMP}/ife/CMakeLists.txt" ]; then
+            echo "using ${{ github.repository_owner }}/Iris-File-Extension"
+          else
+            echo "no usable ${{ github.repository_owner }}/Iris-File-Extension" \
+                 "(any clone error above is expected) - falling back to IrisDigitalPathology"
+            rm -rf "${RUNNER_TEMP}/ife"
+            git clone --depth 1 "https://github.com/IrisDigitalPathology/Iris-File-Extension.git" "${RUNNER_TEMP}/ife"
+          fi
+
       - name: Configure & Build
         working-directory: javascript
         run: |
           source ${{ github.workspace }}/emsdk/emsdk_env.sh
-          emcmake cmake -B build -DCMAKE_INSTALL_PREFIX=install .
+          emcmake cmake -B build -DCMAKE_INSTALL_PREFIX=install -D FETCHCONTENT_SOURCE_DIR_IRISFILEEXTENSION="${{ runner.temp }}/ife" .
           cmake --build build --config Release -j$CPU_COUNT
           cmake --install build
         shell: bash

@@ -1114,14 +1114,22 @@ inline Offset STORE_ATTRIBUTES (const File& file,
     // 2) Bytes
     // 3) Attributes header
     
-    // Build the attribute pairs once; the generated writer derives both the
-    // sizes array and the packed key/value byte run from them, so the
-    // slicing cannot drift from the bytes it describes.
-    std::vector<std::pair<std::string, std::string>> attr_pairs;
+    // Build the attributes once; the generated writer derives both the sizes
+    // array and the packed key/value byte run from them, so the slicing cannot
+    // drift from the bytes it describes.
+    //
+    // KIND defaults to ATTRIBUTE_STRING, so every value written here is text
+    // and the bytes are what this encoder has always produced. An attribute
+    // whose value is a DICOM sequence sets KIND to ATTRIBUTE_NESTED and fills
+    // `nested` with the offsets of the attributes blocks holding its items --
+    // which this encoder does not yet do, because nothing upstream of it
+    // carries a tree to write.
+    std::vector<AttributeSizeEntry> attr_pairs;
     attr_pairs.reserve(attributes.size());
     for (auto&& [key, value] : attributes)
-        attr_pairs.emplace_back(key, std::string(
-            reinterpret_cast<const char*>(value.data()), value.size()));
+        attr_pairs.push_back({.key   = key,
+                              .value = std::string(
+                                  reinterpret_cast<const char*>(value.data()), value.size())});
     
     // Store the attributes sizes (how to slice up the char byte blob)
     // Sections 2.2.4
