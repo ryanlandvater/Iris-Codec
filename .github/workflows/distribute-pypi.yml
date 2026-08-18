@@ -58,7 +58,26 @@ jobs:
                 python -m pip install --upgrade pip 
                 pip install build scikit-build-core meson ninja setuptools-scm
 
+          - name: Check out Iris-File-Extension (this owner's fork if present, else upstream)
+            # Same per-owner resolution as the reusable build workflows: the
+            # python module compiles against the fetched IFE, and the org's
+            # main still carries the pre-move layout without
+            # include/IrisFileExtension.hpp.
+            shell: bash
+            run: |
+                if git clone --depth 1 "https://github.com/${{ github.repository_owner }}/Iris-File-Extension.git" "${RUNNER_TEMP}/ife" && \
+                   [ -f "${RUNNER_TEMP}/ife/CMakeLists.txt" ]; then
+                  echo "using ${{ github.repository_owner }}/Iris-File-Extension"
+                else
+                  rm -rf "${RUNNER_TEMP}/ife"
+                  git clone --depth 1 "https://github.com/IrisDigitalPathology/Iris-File-Extension.git" "${RUNNER_TEMP}/ife"
+                fi
+
           - name: Build Self-contained Python Module
+            env:
+                # scikit-build-core honours CMAKE_ARGS, the standard pip
+                # convention, and passes it to the CMake configure.
+                CMAKE_ARGS: -DFETCHCONTENT_SOURCE_DIR_IRISFILEEXTENSION=${{ runner.temp }}/ife
             shell: bash
             run: |
                 if [ "${{ github.event_name }}" == "release" ]; then
@@ -93,6 +112,21 @@ jobs:
                 python -m pip install --upgrade pip 
                 pip install scikit-build-core uv cibuildwheel setuptools-scm
 
+          - name: Check out Iris-File-Extension (this owner's fork if present, else upstream)
+            # Same per-owner resolution as the reusable build workflows. The
+            # clone lives inside the workspace because cibuildwheel mounts the
+            # project into the container, so /project/ife-checkout resolves
+            # there.
+            shell: bash
+            run: |
+                if git clone --depth 1 "https://github.com/${{ github.repository_owner }}/Iris-File-Extension.git" "${{ github.workspace }}/ife-checkout" && \
+                   [ -f "${{ github.workspace }}/ife-checkout/CMakeLists.txt" ]; then
+                  echo "using ${{ github.repository_owner }}/Iris-File-Extension"
+                else
+                  rm -rf "${{ github.workspace }}/ife-checkout"
+                  git clone --depth 1 "https://github.com/IrisDigitalPathology/Iris-File-Extension.git" "${{ github.workspace }}/ife-checkout"
+                fi
+
           - name: Build Self-contained Python Module
             env:
                 CIBW_BUILD: "${{ matrix.python }}-*"
@@ -103,6 +137,7 @@ jobs:
                 CIBW_MANYLINUX_PYPY_X86_64_IMAGE: quay.io/pypa/manylinux_2_34_x86_64
                 CIBW_MANYLINUX_PYPY_AARCH64_IMAGE: quay.io/pypa/manylinux_2_34_aarch64
                 CIBW_REPAIR_WHEEL_COMMAND_LINUX: "auditwheel repair -w {dest_dir} {wheel} --exclude libopenslide.so.*"
+                CIBW_ENVIRONMENT: "CMAKE_ARGS=-DFETCHCONTENT_SOURCE_DIR_IRISFILEEXTENSION=/project/ife-checkout"
             shell: bash
             run: |
                 if [ "${{ github.event_name }}" == "release" ]; then
