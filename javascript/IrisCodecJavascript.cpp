@@ -409,7 +409,7 @@ emscripten::val _openSlide(const std::string& url) {
     if (!fetch_structural_prefix(url, file_size, prefix, version))
         throw std::runtime_error
         ("Failed to fetch the hosted file's structural blocks from remote endpoint ("+url+")");
-    auto file = abstract_file_structure(prefix.data(), prefix.size());
+    auto file = abstract_file_structure({prefix.data(), prefix.size()});
     return emscripten::val(std::make_shared<__INTERNAL__Slide>(url,file));
 }
 } // END IRIS_CODEC
