@@ -54,36 +54,9 @@ PROJECT (
     VERSION ${IRIS_CODEC_VERSION_STRING}
 )
 
-FetchContent_Declare (
-    IrisHeaders
-    GIT_REPOSITORY https://github.com/IrisDigitalPathology/Iris-Headers.git
-    GIT_TAG "origin/main"
-    GIT_SHALLOW ON
-    FETCHCONTENT_UPDATES_DISCONNECTED ON
-)
-# Do not export the IFE API. 
-set(IFE_BUILD_SHARED OFF)
-set(IFE_BUILD_STATIC OFF)
-# NOTE: The following IFE_Export definition
-# is IFE_EXPORT= to blank out import/export
-# declarations. This is important as we use
-# intermediate objects rather than link to
-# the Iris File Extension Library (MSVC)
-add_compile_definitions(IFE_EXPORT=)
-FetchContent_Declare (
-    IrisFileExtension
-    GIT_REPOSITORY https://github.com/IrisDigitalPathology/Iris-File-Extension.git
-    GIT_TAG "origin/main"
-    GIT_SHALLOW ON
-    FETCHCONTENT_UPDATES_DISCONNECTED ON
-    FETCHCONTENT_QUIET ON
-)
-message(STATUS "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
-FetchContent_MakeAvailable(
-    IrisHeaders
-    IrisFileExtension
-)
-message(STATUS "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
+# Iris-Headers and Iris-File-Extension, from this repository's owner — the
+# same pair the native build fetches.
+include(${CMAKE_CURRENT_LIST_DIR}/../cmake/iris-repositories.cmake)
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Iris Codec Universal Object Build
