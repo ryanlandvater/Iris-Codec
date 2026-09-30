@@ -13,3 +13,6 @@ src/IrisCodecTypes.hpp
 # it describes, or a test. Ignored rather than merely uncommitted so `git add -A`
 # cannot quietly promote one to a permanent document.
 *_handoff.md
+
+# macOS Finder metadata
+.DS_Store
