@@ -45,6 +45,17 @@
 #include "IrisQueue.hpp"
 #include "IrisAsync.hpp"
 #include "IrisFileExtension.hpp"
+// The Iris File Extension moved its public surface out of namespace IrisCodec:
+// its entry points and abstraction types are namespace Iris::File now, and the
+// core they build on is Iris::. This codec grew up with those names in scope —
+// IrisCodecTypes.hpp aliases most of the core, and this names the two the move
+// left dangling plus the abstraction namespace. Scoped here, ahead of the codec
+// headers that spell them, rather than reopening a namespace everywhere.
+namespace IrisCodec {
+namespace Abstraction = ::Iris::File::Abstraction;  // Abstraction::File, ::TileTable
+namespace Async       = ::Iris::Async;              // Async::ThreadPool
+using ::Iris::atomic_uint64;                        // the encoder's running offset
+}  // namespace IrisCodec
 #include "IrisCodecPrivTypes.hpp"
 #include "IrisCodecFile.hpp"
 #include "IrisCodecContext.hpp"

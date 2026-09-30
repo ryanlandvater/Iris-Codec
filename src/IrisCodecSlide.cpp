@@ -34,7 +34,7 @@ Iris::Result is_iris_codec_file(const std::string &file_path) noexcept
         // entry point returns a Result now, and Iris::Result::operator bool is
         // non-const, so the flag comparison is the form that keeps working if
         // this is ever held in a const local.
-        if (is_iris_codec_file({file->ptr, file->size}) != IRIS_SUCCESS)
+        if (Iris::File::is_iris_codec_file({file->ptr, file->size}) != IRIS_SUCCESS)
             throw std::runtime_error
             ("file does not contain an Iris Codec Extension header.\n");
         
@@ -59,7 +59,7 @@ Iris::Result validate_slide (const struct SlideOpenInfo &info) noexcept
         if (file == nullptr) throw std::runtime_error("file path is not a valid file\n");
         
         ReadLock read_lock (file->resize);
-        return validate_file_structure({file->ptr, file->size});
+        return Iris::File::validate_file_structure({file->ptr, file->size});
         
     } catch (std::runtime_error &e) {
         return Iris::Result (
@@ -213,7 +213,7 @@ Iris::Result get_slide_annotations(const Slide &slide, Annotations &annotations)
 __INTERNAL__Slide::__INTERNAL__Slide    (const Context& cxt, const File& file) :
 _context                                (cxt),
 _file                                   (file),
-_abstraction                            (abstract_file_structure({file->ptr, file->size}))
+_abstraction                            (Iris::File::abstract_file_structure({file->ptr, file->size}))
 {
     
 }

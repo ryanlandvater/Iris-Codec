@@ -141,7 +141,7 @@ struct DerivationInfo {
     using Queue                 = Async::ThreadPool;
     using Strategy              = EncoderDerivation;
     using Tracker               = EncoderTracker;
-    using Table                 = IrisCodec::Abstraction::TileTable;
+    using Table                 = Abstraction::TileTable;
     using AtomicOffset          = atomic_uint64;
     const Context&  context;
     const Queue&    queue;

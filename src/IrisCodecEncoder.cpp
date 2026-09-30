@@ -17,7 +17,7 @@ namespace IrisCodec {
 // The generated consumer API (IFE_Serialization.hpp): one namespace for the
 // whole write surface. Brought in so the retired bare sentinels (NULL_OFFSET)
 // keep resolving; the writers below are migrated to its store()/size_of().
-using namespace Serialization;
+using namespace Iris::File::Serialization;
 
 // The generated writers report failures as a Status; this encoder's contract
 // is exceptions, so convert at the API boundary.
