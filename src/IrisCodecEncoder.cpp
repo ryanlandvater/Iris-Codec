@@ -7,50 +7,16 @@
 #include <cmath>
 #include <cstring>
 #include <filesystem>
+#include <random>
 #include <vector>
 #include "IrisCodecPriv.hpp"
+#include "IFE_Builder.hpp"   // the block tier: builder->claim / fill / append
 
 // TODO: Make max pending memory a runtime configurable
 constexpr size_t MAX_MEMORY_PRESSURE = 2E9; // 2 GB
 
 namespace IrisCodec {
-// The generated consumer API (IFE_Serialization.hpp): one namespace for the
-// whole write surface. Brought in so the retired bare sentinels (NULL_OFFSET)
-// keep resolving; the writers below are migrated to its store()/size_of().
-using namespace Iris::File::Serialization;
-
-// The generated writers report failures as a Status; this encoder's contract
-// is exceptions, so convert at the API boundary.
-[[noreturn]] inline void THROW_IF_FAILED (const Status& status, const char* what) {
-    throw std::runtime_error(std::string(what) + " failed: " +
-                             status.block + "." + status.field + " (check code " +
-                             std::to_string(static_cast<int>(status.code)) + ")");
-}
-
-// The generated layer's ImageEntry.ORIENTATION is the decoded float; the
-// codec's ImageOrientation enum carries IEEE binary16 bits. Decode.
-inline float HALF_TO_FLOAT (const uint16_t half) noexcept {
-    const uint32_t sign = uint32_t(half & 0x8000u) << 16;
-    const uint32_t exp  = (half >> 10) & 0x1Fu;
-    const uint32_t man  = half & 0x3FFu;
-    uint32_t bits;
-    if (exp == 0) {
-        if (man == 0) bits = sign;
-        else {
-            int e = -1;
-            uint32_t m = man;
-            do { ++e; m <<= 1; } while ((m & 0x400u) == 0);
-            bits = sign | uint32_t(127 - 15 - e) << 23 | (m & 0x3FFu) << 13;
-        }
-    } else if (exp == 0x1Fu) {
-        bits = sign | 0x7F800000u | (man << 13);
-    } else {
-        bits = sign | uint32_t(exp - 15 + 127) << 23 | (man << 13);
-    }
-    float out;
-    std::memcpy(&out, &bits, sizeof out);
-    return out;
-}
+using Iris::File::Builder;
 
 inline void CHECK_ENCODER (const Encoder& encoder) {
     if (!encoder)               throw std::runtime_error ("No valid encoder provided");
@@ -635,18 +601,6 @@ inline EncoderSource OPEN_SOURCE (const std::string& path_, const Context contex
     #endif
    
 }
-inline BYTE* FILE_CHECK_EXPAND (const File& file, size_t required_size)
-{
-    if (required_size > file->size) {
-        auto result     = resize_file(file, {
-            .size       = required_size,
-            .pageAlign  = false,
-        });
-        if (result != IRIS_SUCCESS)
-            throw std::runtime_error
-            ("Failed to resize slide file "+file->path+": " + result.message);
-    } return file->ptr;
-}
 inline Buffer GET_SOURCE_TILE (const EncoderSource& src, LayerIndex layer, TileIndex tile)
 {
     switch (src.sourceType) {
@@ -697,26 +651,22 @@ inline Buffer READ_SOURCE_TILE (const Context& ctx, const EncoderSource& src, La
 }
 inline static void ENCODE_SOURCE_PYRAMID (const Context ctx,
                                           const EncoderSource& src,
-                                          const File file,
+                                          const Builder builder,
+                                          const Encoding encoding,
                                           EncoderTracker* _tracker,
-                                          Abstraction::TileTable* _table,
-                                          atomic_uint64* _offset,
                                           AtomicEncoderStatus* _status)
 {
     auto& extent    = src.extent;
     auto& tracker   = *_tracker;
-    auto& table     = *_table;
-    auto& offset    = *_offset;
     auto& status    = *_status;
-    
+
     // Allocate a layer and tile index counter.
     uint32_t __LI           = 0;
     uint32_t __TI           = 0;
     uint32_t __LAYERS       = U32_CAST(extent.layers.size());
-    
+
     try { for (__LI = 0; __LI < __LAYERS; ++__LI) {
         auto& layer_tracker = tracker.layers[__LI];
-        auto& layer_table   = table.layers[__LI];
         for (__TI = 0; __TI < layer_tracker.size(); ++__TI) {
             // System check step: Only continue if the encoder is active
             if (status != ENCODER_ACTIVE) return;
@@ -740,36 +690,21 @@ inline static void ENCODE_SOURCE_PYRAMID (const Context ctx,
                 bytes           = ctx->compress_tile({
                     .pixelArray = pixel_array,
                     .format     = src.format,
-                    .encoding   = table.encoding
+                    .encoding   = encoding
                 });
             }
             if (!bytes) throw std::runtime_error("Failed to compress slide image data");
-            
+
             //  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
             //  WRITE TO FILE STEP
             //  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
-            auto& entry     = layer_table[__TI];
-            entry.size      = U32_CAST(bytes->size());
-            entry.offset    = offset.fetch_add(entry.size);
-            ReadLock shared_write_lock (file->resize);
-            tile.status     = TILE_ENCODING;
-            if (entry.offset + entry.size > file->size) {
-                shared_write_lock.unlock();
-                WriteLock resize_lock (file->resize);
-                // Expand the file by 500 MB per expansion
-                // We will shrink it back down to size at the end.
-                auto result = resize_file(file, FileResizeInfo {
-                    .size = file->size + (size_t)5E8,
-                });
-                if (result != IRIS_SUCCESS)
-                    throw std::runtime_error("Failed to resize growing tile blocks");
-                resize_lock.unlock();
-                shared_write_lock.lock();
-            }
-            auto dst = file->ptr + entry.offset;
-            memcpy(dst, bytes->data(), entry.size);
-            shared_write_lock.unlock();
-            
+            //  An Iris source's tiles pass through as they are: an empty stream
+            //  is its NULL_TILE, still "no tile at this position", and a
+            //  Z-stacked stream keeps the plane count its frame records.
+            if (bytes->size() == 0) builder.append_null_tile(__LI, __TI);
+            else builder.append_tile(__LI, __TI, static_cast<const BYTE*>(bytes->data()), bytes->size(),
+                                     src.irisSlide ? src.irisSlide->get_slide_parser().tile_planes(__LI, __TI) : 0);
+
             //  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
             //  RELEASE TILE STEP
             //  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
@@ -777,7 +712,7 @@ inline static void ENCODE_SOURCE_PYRAMID (const Context ctx,
             tracker.completed++;
         }
     }
-    } catch (std::runtime_error&e) {
+    } catch (const std::exception&e) {   // the Builder refuses with logic_error kinds too
         status.store(ENCODER_ERROR);
         MutexLock __ (tracker.error_msg_mutex);
         tracker.error_msg += std::string("Slide tile encoding failed: ") +
@@ -789,7 +724,6 @@ inline static void ENCODE_SOURCE_PYRAMID (const Context ctx,
 }
 inline static void ENCODE_DERIVE_PYRAMID (const Context ctx,
                                           const EncoderSource& src,
-                                          const File& file,
                                           EncoderTracker* _tracker,
                                           AtomicEncoderStatus* _status,
                                           const std::function <void(uint32_t layer_index,
@@ -836,7 +770,7 @@ inline static void ENCODE_DERIVE_PYRAMID (const Context ctx,
                 ENQUEUE_TILE (dst_l,y,x);
             }
         }
-    } catch (std::runtime_error&e) {
+    } catch (const std::exception&e) {   // an Iris source's Parser reports out_of_range
         _status->store(ENCODER_ERROR);
         MutexLock __ (_tracker->error_msg_mutex);
         _tracker->error_msg += std::string("Slide tile encoding failed: ") +
@@ -844,111 +778,6 @@ inline static void ENCODE_DERIVE_PYRAMID (const Context ctx,
         _status->notify_all();
         return;
     }
-}
-inline void VALIDATE_TILE_WRITES (const EncoderTracker& tracker, const Abstraction::TileTable& table)
-{
-    if (tracker.layers.size() != table.layers.size())
-        throw std::runtime_error("Tile encoder tracker and tile ptr map mismatch. File corruption.");
-    for (int layer_idx = U32_CAST(tracker.layers.size()-1); layer_idx>=0; --layer_idx) {
-        auto&& tracker_layer = tracker.layers[layer_idx];
-        for (auto tile_idx = 0; tile_idx < tracker_layer.size(); ++tile_idx) {
-            if (tracker_layer[tile_idx].status != TILE_COMPLETE) {
-                std::cout << "[" << layer_idx << ","
-                << tile_idx/table.extent.layers[layer_idx].xTiles << ","
-                << tile_idx%table.extent.layers[layer_idx].xTiles << "] "
-                << tile_idx << " ("
-                << tracker_layer[tile_idx].subtile<< ")\n";
-                continue;
-            }
-            
-        }
-    }
-    for (auto layer_idx = 0; layer_idx < tracker.layers.size(); ++layer_idx) {
-        auto&& tracker_layer = tracker.layers[layer_idx];
-        auto&& table_layer   = table.layers[layer_idx];
-        if (tracker_layer.size() != table_layer.size())
-            throw std::runtime_error
-            ("Tile encoder tracker and tile ptr map mismatch for layer " +
-             std::to_string(layer_idx) + ". File corruption.\n" +
-             "Place a breakpoint in"+__FILE__+"at line " +std::to_string(__LINE__));
-        for (auto tile_idx = 0; tile_idx < tracker_layer.size(); ++tile_idx) {
-            if (tracker_layer[tile_idx].status != TILE_COMPLETE)
-                throw std::runtime_error
-                ("Layer" + std::to_string(layer_idx) + ", tile " + std::to_string(tile_idx) +
-                 "was marked as incompletely encoded. Encoding incomplete.\n" +
-                 "Place a breakpoint in"+__FILE__+"at line " +std::to_string(__LINE__));
-            auto&& tile = table_layer[tile_idx];
-            if (tile.offset == NULL_OFFSET || tile.size == 0)
-                throw std::runtime_error
-                ("Layer" + std::to_string(layer_idx) + ", tile " + std::to_string(tile_idx) +
-                 "contained invalid size or mapped file ptr identified in the table. File corruption.\n" +
-                 "Place a breakpoint in"+__FILE__+"at line " +std::to_string(__LINE__));
-        }
-    }
-}
-inline Offset STORE_TILE_TABLE (const File& file, const Abstraction::TileTable& table, atomic_uint64& offset)
-{
-    // Perform checks here
-    if (table.layers.size() != table.extent.layers.size())
-        throw std::runtime_error("Failure in tile ptr encoding; table does not match slide extent.");
-    
-    auto __base = file->ptr;
-    // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    // SLIDE TILE ARRAY SERIALIZATION
-    // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    // The generated API takes one flat entry array; flatten the per-layer
-    // tile lists into it.
-    std::vector<TileOffsetEntry> tile_entries;
-    for (auto&& layer : table.layers)
-        for (auto&& tile : layer)
-            tile_entries.push_back({tile.offset, tile.size});
-    auto   tiles_size   = size_of(TileOffsetsCreateInfo{tile_entries});
-    Offset tiles_offset = offset.fetch_add(tiles_size);
-    __base              = FILE_CHECK_EXPAND(file, offset); // Always check bounds before writing
-    THROW_IF_FAILED(store(__base, tiles_offset, TileOffsetsCreateInfo{tile_entries}), "STORE_TILE_OFFSETS");
-    
-    // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    // SLIDE TILE EXTENT SERIALIZATION
-    // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    // Write Iris::Extent to file
-    // This must be written backwards as an array of layer extents
-    std::vector<LayerExtentEntry> extent_entries;
-    for (auto&& layer : table.extent.layers)
-        // Z_PLANES is the 1.1-appended field; zero = single plane, which is
-        // all this v1-era encoder knows how to express.
-        extent_entries.push_back({layer.xTiles, layer.yTiles, layer.scale, 0});
-    auto   l_extents_size = size_of(LayerExtentsCreateInfo{extent_entries});
-    Offset l_extents_offset = offset.fetch_add(l_extents_size);
-    __base                  = FILE_CHECK_EXPAND(file, offset);
-    THROW_IF_FAILED(store(__base, l_extents_offset, LayerExtentsCreateInfo{extent_entries}), "STORE_EXTENTS");
-    
-    // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    // WRITE THE TILE TABLE HEADER
-    // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    auto    ttable_size     = TILE_TABLE::header_size;
-    Offset  ttable_offset   = offset.fetch_add(ttable_size);
-    __base                  = FILE_CHECK_EXPAND(file, offset);
-    THROW_IF_FAILED(store(__base, ttable_offset, TileTableCreateInfo {
-        .ENCODING            = static_cast<TileEncodings>(table.encoding),
-        .FORMAT              = static_cast<PixelFormats>(table.format),
-        .TILE_OFFSETS_OFFSET = tiles_offset,
-        .LAYER_EXTENTS_OFFSET = l_extents_offset,
-        .X_EXTENT            = table.extent.width,
-        .Y_EXTENT            = table.extent.height,
-        // TILE_LENGTH is the 1.1-appended field; the abstraction carries the
-        // slide's tile edge length (256 unless a file said otherwise).
-        .TILE_LENGTH         = table.tileLength,
-    }), "STORE_TILE_TABLE");
-    
-    // Return the Tile Table Offset
-    return ttable_offset;
-}
-inline Offset RESERVE_METADATA (const File& file, atomic_uint64& offset)
-{
-    auto    metadata_size   = METADATA::header_size;
-    Offset  metadata_offset = offset.fetch_add(metadata_size);
-    FILE_CHECK_EXPAND(file, offset);
-    return  metadata_offset;
 }
 inline Metadata READ_METADATA (const EncoderSource& source, const Extent& extent, bool anonymize) {
     switch (source.sourceType) {
@@ -973,233 +802,120 @@ inline Metadata READ_METADATA (const EncoderSource& source, const Extent& extent
     } throw std::runtime_error
     ("READ_METADATA due to invalid source type value ("+std::to_string(source.sourceType)+")");
 }
-inline Offset STORE_ICC (const File& file,
-                         const Metadata& metadata,
-                         atomic_uint64& offset)
+inline void APPEND_ASSOCIATED_IMAGES (const Context& ctx,
+                                      const Builder& builder,
+                                      const EncoderSource& source,
+                                      const Metadata& metadata)
 {
-    // If there is no embedded ICC profile, return NULL_OFFSET
-    // to indicate this optional block will not be used.
-    if (metadata.ICC_profile.size() == 0) return NULL_OFFSET;
-    
-    // Get bytes size and write ICC profile to byte stream
-    Size profile_size       = size_of(IccProfileCreateInfo{
-        reinterpret_cast<const BYTE*>(metadata.ICC_profile.data()),
-        metadata.ICC_profile.size()});
-    Offset profile_offset   = offset.fetch_add(profile_size);
-    auto   __base           = FILE_CHECK_EXPAND(file, offset);
-    THROW_IF_FAILED(store(__base, profile_offset, IccProfileCreateInfo{
-        reinterpret_cast<const BYTE*>(metadata.ICC_profile.data()),
-        metadata.ICC_profile.size()}), "STORE_ICC_COLOR_PROFILE");
-    
-    // Return the byte location of the ICC profile
-    return profile_offset;
-}
-inline Offset STORE_ASSOCIATED_IMAGES (const Context& ctx,
-                                       const File& file,
-                                       const EncoderSource& source,
-                                       const Metadata& metadata,
-                                       atomic_uint64& offset)
-{
-    // If there are no associated images, return NULL_OFFSET
-    // to indicate this optional block will not be used.
-    if (metadata.associatedImages.size() == 0) return NULL_OFFSET;
-    
-    // Otherwise begin encoding images
-    // The array of associated image entries; one per label, filled below.
-    std::vector<ImageEntry> image_entries;
-    
-    // Encode each of the associated image variable byte blocks
-    // This corresponds with IFE Specification Section 2.4.7
-    for (auto& label : metadata.associatedImages) {
+    // One IMAGE_BYTES block per label, in label order. An image that cannot be
+    // read is reported and skipped; it does not fail the slide.
+    for (auto& label : metadata.associatedImages) try {
         AssociatedImageInfo info;
         Buffer bytes;
-        try {
-            // Get the compressed image stream (bytes) and image info (info)
-            // routine based upon source type
-            switch (source.sourceType) {
-                case EncoderSource::ENCODER_SRC_UNDEFINED:
-                    throw std::runtime_error("STORE_METADATA failed due to undefined source type");
-                case EncoderSource::ENCODER_SRC_IRISSLIDE:
-                    info    = source.irisSlide->get_assoc_image_info(label);
-                    bytes   = source.irisSlide->get_assoc_image(label);
-                    break;
-                case EncoderSource::ENCODER_SRC_OPENSLIDE:
-                    info    = READ_OPENSLIDE_ASSOCIATED_IMAGE_INFO(source.openslide, label);
-                    bytes   = ctx->compress_image(CompressImageInfo{
-                        .pixelArray = READ_OPENSLIDE_ASSOCIATED_IMAGE(source.openslide, info),
-                        .width      = info.width,
-                        .height     = info.height,
-                        .format     = info.sourceFormat,
-                        .encoding   = info.encoding,
-                        .quality    = QUALITY_DEFAULT
-                    });
-                    break;
-                case EncoderSource::ENCODER_SRC_DICOM:
-                    std::cout << "This implementation has not";
-                    break;
-                case EncoderSource::ENCODER_SRC_APERIO:
-                    //TODO: APERIO READ METADATA
-                    throw std::runtime_error("READ_METADATA failed as APERIO TIFF reads not yet built; Use openslide for the moment");
-            }
-            if (bytes->size() == 0) throw std::runtime_error
-                ("no bytes given for image buffer byte size");
-            
-            // Store the data-block 1) get size 2) write to the stream 3) record location
-            // The generated store writes the block header only; the ASCII
-            // label and compressed stream follow it.
-            const Size block_size   = IMAGE_BYTES::header_size +
-                                      label.size() + bytes->size();
-            Offset block_offset     = offset.fetch_add(block_size);
-            auto   __base           = FILE_CHECK_EXPAND(file, offset);
-            THROW_IF_FAILED(store(__base, block_offset, ImageBytesCreateInfo{
-                U16_CAST(label.size()), U32_CAST(bytes->size())}), "STORE_IMAGES_BYTES");
-            BYTE* __ptr             = __base + block_offset + IMAGE_BYTES::header_size;
-            std::memcpy(__ptr, label.data(), label.size());
-            std::memcpy(__ptr + label.size(), (BYTE*)bytes->data(), bytes->size());
-            
-            image_entries.push_back({
-                block_offset,
-                info.width,
-                info.height,
-                static_cast<ImageEncodings>(info.encoding),
-                static_cast<PixelFormats>(info.sourceFormat),
-                HALF_TO_FLOAT(info.orientation)
-            });
-            
-        } catch (std::runtime_error &error) {
-            std::cout   << "Failed to store associated image labeled \""
-            << label << "\": " << error.what() << "\n";
-            continue;
-        }
-    }
-    
-    // Now record of all associated images to the byte stream
-    Size   images_size              = size_of(ImagesCreateInfo{image_entries});
-    Offset images_offset            = offset.fetch_add(images_size);
-    auto   __base                   = FILE_CHECK_EXPAND(file, offset);
-    THROW_IF_FAILED(store(__base, images_offset, ImagesCreateInfo{image_entries}), "STORE_IMAGES_ARRAY");
-    
-    // Return the images array offset
-    return images_offset;
-}
-inline Offset STORE_ATTRIBUTES (const File& file,
-                                const Metadata& metadata,
-                                atomic_uint64& offset)
-{
-    // If there are no attributes, return NULL_OFFSET
-    // to indicate this optional block will not be used.
-    const auto& attributes = metadata.attributes;
-    if (attributes.size() == 0) return NULL_OFFSET;
-    
-    // Attributes validation
-    switch (attributes.type) {
-        case METADATA_UNDEFINED:throw std::runtime_error
-            ("Metadata attributes have an undefined type. These will NOT be written to the file stream.");
-            
-        case METADATA_I2S:
-            if (!attributes.version) {
-                // Freetext metadata
+        switch (source.sourceType) {
+            case EncoderSource::ENCODER_SRC_UNDEFINED:
+                throw std::runtime_error("undefined source type");
+            case EncoderSource::ENCODER_SRC_IRISSLIDE:
+                info    = source.irisSlide->get_assoc_image_info(label);
+                bytes   = source.irisSlide->get_assoc_image(label);
                 break;
-            }
-            // TODO: Add I2S here. Add I2S Validation here
-            break;
-        case METADATA_DICOM:
-            
-            // TODO: Add libDICOM validation here.
-            break;
+            case EncoderSource::ENCODER_SRC_OPENSLIDE:
+                info    = READ_OPENSLIDE_ASSOCIATED_IMAGE_INFO(source.openslide, label);
+                bytes   = ctx->compress_image(CompressImageInfo{
+                    .pixelArray = READ_OPENSLIDE_ASSOCIATED_IMAGE(source.openslide, info),
+                    .width      = info.width,
+                    .height     = info.height,
+                    .format     = info.sourceFormat,
+                    .encoding   = info.encoding,
+                    .quality    = QUALITY_DEFAULT
+                });
+                break;
+            case EncoderSource::ENCODER_SRC_DICOM:
+                throw std::runtime_error("DICOM associated images are not yet read");
+            case EncoderSource::ENCODER_SRC_APERIO:
+                throw std::runtime_error("APERIO TIFF reads not yet built; Use openslide for the moment");
+        }
+        if (!bytes) throw std::runtime_error("no compressed image stream");
+        builder.append_image(info, static_cast<const BYTE*>(bytes->data()), bytes->size());
+    } catch (const std::exception &error) {
+        std::cout   << "Failed to store associated image labeled \""
+                    << label << "\": " << error.what() << "\n";
     }
-    
-    // Attributes are stored in 3 data-blocks
-    // 1) Sizes
-    // 2) Bytes
-    // 3) Attributes header
-    
-    // Build the attributes once; the generated writer derives both the sizes
-    // array and the packed key/value byte run from them, so the slicing cannot
-    // drift from the bytes it describes.
-    //
-    // KIND defaults to ATTRIBUTE_STRING, so every value written here is text
-    // and the bytes are what this encoder has always produced. An attribute
-    // whose value is a DICOM sequence sets KIND to ATTRIBUTE_NESTED and fills
-    // `nested` with the offsets of the attributes blocks holding its items --
-    // which this encoder does not yet do, because nothing upstream of it
-    // carries a tree to write.
-    std::vector<AttributeSizeEntry> attr_pairs;
-    attr_pairs.reserve(attributes.size());
-    for (auto&& [key, value] : attributes)
-        attr_pairs.push_back({.key   = key,
-                              .value = std::string(
-                                  reinterpret_cast<const char*>(value.data()), value.size())});
-    
-    // Store the attributes sizes (how to slice up the char byte blob)
-    // Sections 2.2.4
-    Size sizes_size     = size_of(AttributeSizesCreateInfo{attr_pairs});
-    Offset sizes_offset = offset.fetch_add(sizes_size);
-    auto  __base        = FILE_CHECK_EXPAND(file, offset);
-    THROW_IF_FAILED(store(__base, sizes_offset, AttributeSizesCreateInfo{attr_pairs}), "STORE_ATTRIBUTES_SIZES");
-    
-    // Store the raw attributes characters byte-blob
-    // Section 2.2.5
-    Size bytes_size     = size_of(AttributeBytesCreateInfo{attr_pairs});
-    Offset bytes_offset = offset.fetch_add(bytes_size);
-    __base              = FILE_CHECK_EXPAND(file, offset);
-    THROW_IF_FAILED(store(__base, bytes_offset, AttributeBytesCreateInfo{attr_pairs}), "STORE_ATTRIBUTES_BYTES");
-    
-    // Store the attributes header
-    Offset attr_offset  = offset.fetch_add(ATTRIBUTES::header_size);
-    THROW_IF_FAILED(store(__base, attr_offset, AttributesCreateInfo{
-        .FORMAT       = static_cast<MetadataFormats>(attributes.type),
-        .VERSION      = attributes.version,
-        .SIZES_OFFSET = sizes_offset,
-        .BYTES_OFFSET = bytes_offset
-    }), "STORE_ATTRIBUTES");
-    
-    return attr_offset;
 }
-inline void STORE_METADATA (const File& file,
-                            const Offset metadata_offset,
-                            const Metadata& metadata,
-                            const Offset ICC_offset,
-                            const Offset images_offset,
-                            const Offset attributes_offset,
-                            const Offset annotations_offset)
+inline Iris::File::BuilderFinalizeInfo WRITE_SLIDE_STRUCTURE (const Context& ctx,
+                                                              const Iris::File::BuilderTileTableInfo& grid,
+                                                              const Builder& builder,
+                                                              const EncoderSource& source,
+                                                              const Metadata& metadata)
 {
-    THROW_IF_FAILED(store(file->ptr, metadata_offset, MetadataCreateInfo{
+    using namespace Iris::File::Serialization;
+    // The layout after the tiles puts blocks that never change ahead of those an
+    // edit replaces: TILE TABLE | METADATA | ICC | IMAGES | ATTRIBUTES, with
+    // annotations to follow. The grid is the caller's (it set it on the
+    // Builder); the Builder reports where it placed the tiles.
+    const auto tiles  = builder.tile_offsets();
+    const auto planes = grid.planes.empty()
+        ? std::vector<uint16_t>(grid.extent.layers.size(), 0) : grid.planes;
+    std::vector<LayerExtentEntry> extents;
+    extents.reserve(grid.extent.layers.size());
+    for (std::size_t l = 0; l < grid.extent.layers.size(); ++l)
+        extents.push_back({.X_TILES  = grid.extent.layers[l].xTiles,
+                           .Y_TILES  = grid.extent.layers[l].yTiles,
+                           .SCALE    = grid.extent.layers[l].scale,
+                           .Z_PLANES = planes[l]});
+    const Offset offsets_at = builder->append(TileOffsetsCreateInfo{.entries = tiles});
+    const Offset extents_at = builder->append(LayerExtentsCreateInfo{.entries = extents});
+    const Offset table_at   = builder->append(TileTableCreateInfo{
+        .ENCODING             = static_cast<Iris::File::constants::TileEncodings>(grid.encoding),
+        .FORMAT               = static_cast<Iris::File::constants::PixelFormats>(grid.format),
+        .TILE_OFFSETS_OFFSET  = offsets_at,
+        .LAYER_EXTENTS_OFFSET = extents_at,
+        .X_EXTENT             = grid.extent.width,
+        .Y_EXTENT             = grid.extent.height,
+        .TILE_LENGTH          = grid.tileLength});
+    const Offset metadata_at    = builder->claim(METADATA::header_size);
+    const Offset icc_at         = metadata.ICC_profile.empty() ? NULL_OFFSET :
+        builder->append(IccProfileCreateInfo{
+            .bytes = reinterpret_cast<const BYTE*>(metadata.ICC_profile.data()),
+            .count = metadata.ICC_profile.size()});
+    APPEND_ASSOCIATED_IMAGES (ctx, builder, source, metadata);
+    const auto   images         = builder.image_entries();
+    const Offset images_at      = images.empty() ? NULL_OFFSET
+        : builder->append(ImagesCreateInfo{.entries = images});
+    std::vector<AttributeSizeEntry> pairs;
+    pairs.reserve(metadata.attributes.size());
+    for (const auto& [key, value] : metadata.attributes)
+        pairs.push_back({.key   = key,
+                         .value = std::string(reinterpret_cast<const char*>(value.data()),
+                                              value.size())});
+    Offset attributes_at        = NULL_OFFSET;
+    if (!metadata.attributes.empty()) {
+        const Offset sizes_at = builder->append(AttributeSizesCreateInfo{.entries = pairs});
+        const Offset bytes_at = builder->append(AttributeBytesCreateInfo{.entries = pairs});
+        attributes_at = builder->append(AttributesCreateInfo{
+            .FORMAT       = static_cast<Iris::File::constants::MetadataFormats>(metadata.attributes.type),
+            .VERSION      = metadata.attributes.version,
+            .SIZES_OFFSET = sizes_at,
+            .BYTES_OFFSET = bytes_at});
+    }
+    // TODO: annotations. Neither the Builder nor this encoder writes them yet.
+    builder->fill(metadata_at, MetadataCreateInfo{
         .CODEC_MAJOR        = U16_CAST(metadata.codec.major),
         .CODEC_MINOR        = U16_CAST(metadata.codec.minor),
         .CODEC_BUILD        = U16_CAST(metadata.codec.build),
-        .ATTRIBUTES_OFFSET  = attributes_offset,
-        .IMAGES_OFFSET      = images_offset,
-        .ICC_COLOR_OFFSET   = ICC_offset,
-        .ANNOTATIONS_OFFSET = annotations_offset,
+        .ATTRIBUTES_OFFSET  = attributes_at,
+        .IMAGES_OFFSET      = images_at,
+        .ICC_COLOR_OFFSET   = icc_at,
         .MICRONS_PIXEL      = metadata.micronsPerPixel,
-        .MAGNIFICATION      = metadata.magnification
-    }), "STORE_METADATA");
-}
-inline void STORE_FILE_HEADER (const File& file,
-                               const Size file_size,
-                               const uint32_t revision,
-                               const Offset tile_table_offset,
-                               const Offset metadata_offset)
-{
-    if (file->size < file_size) throw std::runtime_error
-        ("[ERROR] File failed size check. Attempting to write header for truncated file.");
-    // EXTENSION_MAJOR/MINOR default to the schema version this build writes:
-    // the generated store always lays out the newest fields, so the file must
-    // claim the version its bytes actually have.
-    THROW_IF_FAILED(store(file->ptr, 0, FileHeaderCreateInfo{
-        .FILE_SIZE         = file_size,
-        .FILE_REVISION     = revision,
-        .TILE_TABLE_OFFSET = tile_table_offset,
-        .METADATA_OFFSET   = metadata_offset
-    }), "STORE_FILE_HEADER");
-    resize_file(file, FileResizeInfo {
-        .size               = file_size,
-        .pageAlign          = false
+        .MAGNIFICATION      = metadata.magnification,
+        // An Iris source's Z-stack spacing passes through with its planes.
+        .MICRONS_PLANE      = source.irisSlide ?
+            source.irisSlide->get_slide_parser().abstraction().micronsPerPlane : 0.f,
     });
+    return {.tileTable = table_at, .metadata = metadata_at};
 }
-inline void RESET_TRACKER (EncoderTracker &_tracker, const File &file, const Extent &extent) {
-    _tracker.dst_path   = file->get_path();
+inline void RESET_TRACKER (EncoderTracker &_tracker, const std::string &dst_path, const Extent &extent) {
+    _tracker.dst_path   = dst_path;
     _tracker.completed  = 0;
     _tracker.total      = 0;
     _tracker.layers     = EncoderTracker::Layers(extent.layers.size());
@@ -1210,6 +926,27 @@ inline void RESET_TRACKER (EncoderTracker &_tracker, const File &file, const Ext
         _tracker.total         += n_tiles;
     }
 }
+/// The focal planes per layer an Iris source passes through: a Z-stacked
+/// layer's streams each hold several planes, which the output layer must
+/// declare. Single-plane layers stay 0, as this encoder has always written them;
+/// derived layers and every other source are single-plane.
+inline std::vector<uint16_t> SOURCE_PLANES (const EncoderSource& source, bool derive)
+{
+    if (derive || !source.irisSlide) return {};
+    auto planes = source.irisSlide->get_slide_parser().abstraction().tileTable.planes;
+    for (auto& layer_planes : planes) if (layer_planes <= 1) layer_planes = 0;
+    return planes;
+}
+/// Removes the encoder's scratch file at scope exit: an encode that fails
+/// leaves nothing behind, and one that succeeds has already moved it away.
+struct ScratchFile {
+    std::filesystem::path path;
+    ~ScratchFile() {
+        // Nothing to report: a missing file is the success path.
+        std::error_code ignored;
+        std::filesystem::remove(path, ignored);
+    }
+};
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~~ TILE DERIVATION ~~~~~~~~~~~~~~~~~~~~~~~~ //
 Iris::Extent GENERATE_DERIVED_EXTENT (const EncoderDerivation &_derivation,
@@ -1234,10 +971,10 @@ Result __INTERNAL__Encoder::dispatch_encoder()
     case ENCODER_SHUTDOWN: throw std::runtime_error
             ("[ERROR] Encoder is being shutdown. Cannot start encoding.");
     }
-    
+
     // Attempt to open the source slide file
     auto source = OPEN_SOURCE (_srcPath);
-    
+
     // Validate encoding
     switch (_encoding) {
         case TILE_ENCODING_JPEG: break;
@@ -1249,12 +986,12 @@ Result __INTERNAL__Encoder::dispatch_encoder()
     }
     if (source.format == FORMAT_UNDEFINED)
         source.format = FORMAT_R8G8B8A8;
-    
+
     // Get the source file's name
     std::filesystem::path source_file_path = _srcPath;
     auto source_name = source_file_path.stem();
     auto source_dir  = source_file_path.parent_path();
-    
+
     // Format the output file path
     if (_dstPath.length() == 0)
         _dstPath = source_dir.make_preferred().string();
@@ -1264,33 +1001,42 @@ Result __INTERNAL__Encoder::dispatch_encoder()
     if (_dstPath.back() != std::filesystem::path::preferred_separator)
         _dstPath += std::filesystem::path::preferred_separator;
     std::filesystem::path dst_file_path = _dstPath + source_name.string() + ".iris";
-    
+
     // If the output file already exists, inform that it will be overwritten
     if (std::filesystem::exists(dst_file_path))
         std::cout       << "[WARNING] Destination file " << dst_file_path
                         << " already exists. Overwriting...\n";
-    
-    // Generate a temporary cache file.
-    // We do not write directly to the output file path. It's better
-    // practice to open a temp file within the temp_dir and write to that
-    // (in case it fails we don't keep an artifiact).
-    // We then rename it to the output file path once encoding is successful.
-    auto file = create_cache_file({
-        .unlink     = false,    // Maintain OS link to file so it can be renamed
-        .context    = _context, // Provide own Codec context
-    }); if (file == nullptr) throw std::runtime_error
-        ("[ERROR] Could not create a temporary slide file for encoding");
-    
-    // This is the extent of the output slide file
-    Iris::Extent extent;
-    if (_derive /* If we are deriving all lower-res layers */)
-        extent  = GENERATE_DERIVED_EXTENT (_derivation, source);
-    // Otherwise just copy the source extent
-    else extent = source.extent;
-    
-    // Reset the tracker
-    RESET_TRACKER (_tracker, file, extent);
-    
+
+    // The pyramid of the output slide: derived lower-resolution layers, or the
+    // source's own.
+    const Iris::File::BuilderTileTableInfo table {
+        .encoding   = _encoding,
+        .format     = source.format,
+        .extent     = _derive ? GENERATE_DERIVED_EXTENT (_derivation, source) : source.extent,
+        .planes     = SOURCE_PLANES (source, _derive),
+    };
+
+    // We do not write directly to the output file path. The slide is written
+    // to a scratch file in the temp directory and moved into place once
+    // encoding succeeds, so a failed encode leaves no artifact behind. Naming
+    // and moving files is the encoder's job; the Builder writes where it is told.
+    std::random_device entropy;
+    const auto scratch_path = std::filesystem::temp_directory_path() /
+        ("IrisCodecCache_" + std::to_string(uint64_t{entropy()} << 32 | entropy()));
+    RESET_TRACKER (_tracker, scratch_path.string(), table.extent);
+    auto builder = Builder::create({
+        // A tile stream never outgrows its raw RGBA pixels, and the default
+        // reservation covers everything else. Sparse: only written pages cost
+        // disk, and the file is truncated to its size when sealed.
+        .capacity       = Iris::File::BuilderCreateInfo{}.capacity +
+                          Size{_tracker.total} * TILE_PIX_BYTES_RGBA,
+        .filepath       = scratch_path,
+        // Every layer is single-plane, where tile frames are optional; this
+        // encoder has never written them.
+        .tile_frames    = false,
+    });
+    builder.set_tile_table(table);
+
     // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     // BEGIN OUR ASYNCHRONOUS STEPS; This thread will return immediately
     // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1312,30 +1058,15 @@ Result __INTERNAL__Encoder::dispatch_encoder()
             _threads    = Threads(_concurrency+1);
             break;
     }
-    _threads[0] = std::thread {[this, file, source, extent, dst_file_path](){
-        
+    _threads[0] = std::thread {[this, builder, source, table, scratch_path, dst_file_path]() mutable {
+
         // ~~~ We are now on the separate asynchronous main thread ~~~
-        
-        // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        // CREATE TILE TABLE STEP
-        // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        // Create the tracker to synchronize threads and monitor progress
-        using TileTable     = Abstraction::TileTable;
-        
-        TileTable tile_table;
-        tile_table.encoding = _encoding;
-        tile_table.format   = source.format;
-        tile_table.layers   = TileTable::Layers(extent.layers.size());
-        tile_table.extent   = extent;
-        for (auto __li = 0; __li < extent.layers.size(); ++__li) {
-            auto& __le      = extent.layers[__li];
-            auto  n_tiles   = __le.xTiles*__le.yTiles;
-            tile_table.layers[__li] = TileTable::Layer(n_tiles);
-        }
-        
-        // Create the file byte offset tracker and reserve space for the footer
-        atomic_uint64 offset = FILE_HEADER::header_size;
-        
+
+        // Declared in this order so the Builder's mapping is released before
+        // the scratch file is removed: Windows refuses to delete a mapped file.
+        const ScratchFile scratch {scratch_path};
+        const Builder     writer = std::move(builder);
+
         // Create the downsample information struct
         // WARNING: THIS MUST PERSIST UNTIL ALL ASYNC THREADS ARE COMPLETE
         const auto queue = _derive?Iris::Async::createThreadPool(_concurrency):NULL;
@@ -1343,27 +1074,26 @@ Result __INTERNAL__Encoder::dispatch_encoder()
             .context    = _context,
             .queue      = queue,
             .strategy   = _derivation,
-            .file       = file,
+            .builder    = writer,
+            .table      = table,
             .tracker    = _tracker,
-            .table      = tile_table,
-            .offset     = offset
         };
-        
+
         // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         // DISPATCH THE TILE ENCODING THREADS AND WAIT UPON THEIR COMPLETION
         // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         for (auto thread_idx = 1; thread_idx < _threads.size(); ++thread_idx)
             if (!_derive) /* Just copy source */ _threads[thread_idx] =
                 std::thread {&ENCODE_SOURCE_PYRAMID,
-                    _context, source, file,         // Compressor, source and dst
-                    &_tracker, &tile_table, &offset,// File structure trackers
+                    _context, source, writer,       // Compressor, source and dst
+                    _encoding, &_tracker,           // Tile encoding and tracker
                     &_status                        // Encoder status
                 };
             else /* Spool up async tile derivation */ _threads[thread_idx] =
                 std::thread {&ENCODE_DERIVE_PYRAMID,
-                    _context, source, file,         // Compressor, source and dst
+                    _context, source,               // Compressor and source
                     &_tracker, &_status,            // Tile and Encoder statuses
-                    
+
                     // This lambda function starts the propagation of encoding
                     // the slide pyramid by enqueueing downsampling / writing
                     [this,downsample_info](uint32_t l, uint32_t y, uint32_t x){
@@ -1383,87 +1113,32 @@ Result __INTERNAL__Encoder::dispatch_encoder()
         if (queue) queue->wait_until_complete();
         // It is NOW safe to destroy the downsample_info struct
         // ~~~~~~~~~~~~~~~~~~~~~ END TILE ENCODING ~~~~~~~~~~~~~~~~~~~~~~~~~
-        
-        // If any thread has inactivated the encoder, exit
-        if (_status!= ENCODER_ACTIVE) { _status.notify_all(); goto ENCODING_FAILED;}
-        // This is our exit routine. Delete the created file
-        if (false) { ENCODING_FAILED: IrisCodec::delete_file(file); return;}
-        
-        // ~~~~~~~~~~~~~~~~~~~~~ BEGIN VALIDATION  ~~~~~~~~~~~~~~~~~~~~~~~~~
-        Offset tile_table_offset = NULL_OFFSET;
+
+        // If any thread has inactivated the encoder, exit; the scratch file
+        // goes with this scope.
+        if (_status != ENCODER_ACTIVE) { _status.notify_all(); return; }
+
+        // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        // SLIDE STRUCTURE, SEAL, AND MOVE INTO PLACE
+        // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         try {
-            // Check the tiles to ensure they were properly written to file
-            VALIDATE_TILE_WRITES (_tracker, tile_table);
-            
-            // Write the tile table and return the offset
-            tile_table_offset = STORE_TILE_TABLE (file, tile_table, offset);
-            
-        } catch (std::runtime_error &error) {
+            const Metadata metadata = READ_METADATA (source, table.extent, _anonymize);
+            writer.finalize(WRITE_SLIDE_STRUCTURE (_context, table, writer, source, metadata));
+            // A rename cannot cross volumes (the temp directory is often on
+            // another one); copy instead. The scratch file goes at scope exit.
+            std::error_code across_volumes;
+            std::filesystem::rename(scratch_path, dst_file_path, across_volumes);
+            if (across_volumes) std::filesystem::copy_file
+                (scratch_path, dst_file_path, std::filesystem::copy_options::overwrite_existing);
+        } catch (const std::exception& e) {   // the Builder refuses with logic_error kinds too
             _status.store(ENCODER_ERROR);
             MutexLock __ (_tracker.error_msg_mutex);
-            _tracker.error_msg += std::string("Tile table validation failed: ") +
-                                  error.what() + "\n";
+            _tracker.error_msg += std::string("Slide encoding failed: ") +
+                                  e.what() + "\n";
             _status.notify_all();
             return;
         }
-        
-        // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        // METADATA FORMATTING BLOCK
-        // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        // We prefer the following structure based upon anticipated frequency of updates
-        // SOF | TILES | TILE TABLE | METADATA HEADER | IMAGES | ATTRIBUTES | ANNOTATIONS
-        
-        try {
-            // Read the source metadata
-            Metadata metadata           = READ_METADATA (source, tile_table.extent, _anonymize);
-            
-            // Reserve space for the Metadata block. I like to put it earlier
-            // as it has no signficant risk of growing in size with file modification
-            Offset metadata_offset      = RESERVE_METADATA(file, offset);
-            
-            // Write the metadata and return the metadata block offset
-            Offset ICC_offset           = STORE_ICC (file, metadata, offset);
-            
-            // Write all of the associated images to disk
-            Offset images_offset        = STORE_ASSOCIATED_IMAGES (_context, file, source, metadata, offset);
-            
-            // Write all of the attributes to disk
-            Offset attributes_offset    = STORE_ATTRIBUTES (file, metadata, offset);
-            
-            // TODO: write annotations to disk
-            Offset annoations_offset    = NULL_OFFSET; // Will tackle this next.
-            
-            // Store the metadata
-            STORE_METADATA      (file, metadata_offset, metadata,
-                                 ICC_offset,
-                                 images_offset,
-                                 attributes_offset,
-                                 annoations_offset);
-            
-            // Store the file header
-            STORE_FILE_HEADER   (file,
-                                 offset.load(), 0,
-                                 tile_table_offset,
-                                 metadata_offset);
-            
-        } catch (std::runtime_error& e) {
-            _status.store(ENCODER_ERROR);
-            MutexLock __ (_tracker.error_msg_mutex);
-            _tracker.error_msg += std::string("Metadata encoding failed: ") +
-                                  e.what() + "\n";
-            _status.notify_all();
-            goto ENCODING_FAILED;
-        }
-        
-        auto rename = IrisCodec::rename_file(file, dst_file_path.string());
-        if (rename & IRIS_FAILURE) {
-            _status.store(ENCODER_ERROR);
-            MutexLock __ (_tracker.error_msg_mutex);
-            _tracker.error_msg += rename.message;
-            _status.notify_all();
-            goto ENCODING_FAILED;
-        }
-        
+
         // Encoding is complete. Notify any waiting threads
         auto STATUS = ENCODER_ACTIVE;
         if (_status.compare_exchange_strong(STATUS, ENCODER_INACTIVE) == false) {
@@ -1471,7 +1146,7 @@ Result __INTERNAL__Encoder::dispatch_encoder()
                         << TO_STRING(_status) << "\n";
         } _status.notify_all();
     }};
-    
+
     // We have successfully dispatched the encoding method and may return.
     // All other steps will continue on the _threads[0] thread.
     return IRIS_SUCCESS;

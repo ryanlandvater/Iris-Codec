@@ -38,6 +38,27 @@ The Iris Codec encoder converts WSI files from various vendor formats into optim
 - **Privacy Controls**: Metadata stripping and anonymization options
 - **High Performance**: Multi-threaded with real-time progress tracking
 
+## How the codec sits on the Iris File Extension
+
+The [Iris File Extension](https://github.com/IrisDigitalPathology/Iris-File-Extension) owns the file; Iris Codec owns the pixels. The encoder reads sources, compresses tiles on its own threads and hands each stream to an `Iris::File::Builder`, which claims space in a sparse, never-remapped arena and writes every block. A slide reads through an `Iris::File::Parser`, which maps the file and hands back bounds-checked streams for the codec to decode. The codec maps no file and computes no offset itself.
+
+```mermaid
+flowchart LR
+    subgraph codec["Iris Codec"]
+        src["sources: OpenSlide, DICOM, .iris"] --> enc["Encoder: threads, JPEG/AVIF"]
+        slide["Slide: decode tiles and images"]
+    end
+    subgraph ife["Iris File Extension"]
+        builder["Builder: claim + fill, frames, header"]
+        parser["Parser: mapping, validation, spans"]
+    end
+    enc -- "append_tile / append_image / place the structure" --> builder
+    builder --> file[(".iris file")]
+    file --> parser -- "tile() / image()" --> slide
+```
+
+The Builder writes each block where the head is when it is asked, so the encoder chooses the layout: blocks that never change first, those an edit replaces last — tiles, tile table, metadata, ICC profile, associated images, attributes. A slide is written to a scratch file in the system temp directory and moved into place once it is complete, so a failed encode leaves nothing at the destination.
+
 # Installation
 
 **Requirements:**

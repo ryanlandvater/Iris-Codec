@@ -11,7 +11,12 @@ endif()
 if (NOT IRIS_BUILD_DEPENDENCIES)
     message(STATUS "Google Highways dependency set to system search: attempting to dynamically link")
     message(STATUS "Looking for google/hwy...")
-    find_package(hwy)
+    # Require >= 1.2. The SIMD downsample kernels (Iris-Headers IrisSIMD.cpp)
+    # use SumsOf2 / SumsOf4 / RepartitionToWideX2, which highway added in 1.1.
+    # Ubuntu's libhwy-dev is 1.0.7, so an unversioned find_package silently
+    # accepts a library too old to compile the kernels. A too-old system hwy
+    # is rejected here, and the fallback below builds 1.2.0 from source.
+    find_package(hwy ${IRIS_DEP_HWY_MIN})
     if (hwy_FOUND)
         message(STATUS "hwy FOUND: version ${hwy_VERSION}")
         set(hwy_LIBRARY hwy::hwy)
@@ -35,7 +40,7 @@ if (NOT hwy_LIBRARY OR NOT hwy_INCLUDE)
     ExternalProject_Add (
         hwy
         GIT_REPOSITORY https://github.com/google/highway.git
-        GIT_TAG "1.2.0"
+        GIT_TAG "${IRIS_DEP_HWY}"
         GIT_SHALLOW ON
         FETCHCONTENT_UPDATES_DISCONNECTED ON
         FETCHCONTENT_QUIET ON

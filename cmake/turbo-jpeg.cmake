@@ -38,7 +38,7 @@ if (NOT TURBOJPEG_LIBRARY OR NOT TURBOJPEG_INCLUDE)
     ExternalProject_Add(
         TurboJpeg
         GIT_REPOSITORY https://github.com/libjpeg-turbo/libjpeg-turbo.git
-        GIT_TAG "20ade4d" #"origin/main"
+        GIT_TAG "${IRIS_DEP_JPEG_TURBO}"
         GIT_SHALLOW ON
         UPDATE_DISCONNECTED ON
         BUILD_BYPRODUCTS ${TURBOJPEG_LIBRARY} # Ninja compatability

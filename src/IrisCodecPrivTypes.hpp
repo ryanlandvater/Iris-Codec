@@ -13,38 +13,7 @@ typedef struct tiff             TIFF;
 }
 namespace IrisCodec {
 using       Tile            = std::shared_ptr<class __INTERNAL__Tile>;
-using       File            = std::shared_ptr<class __INTERNAL__File>;
 
-/// Create a new file for writing
-File    create_file         (const struct FileCreateInfo&);
-
-/// Open a file for read or read-write access.
-File    open_file           (const struct FileOpenInfo&);
-
-/// Create a new file-system temporary file for temporary archiving of slide data to disk.
-File    create_cache_file   (const struct CacheCreateInfo&);
-
-/// Resize a file
-Result  resize_file         (const File&, const struct FileResizeInfo&);
-
-/// Rename a file
-Result  rename_file         (const File&, const std::string&);
-
-/// Delete the file
-Result delete_file          (const File &file);
-
-struct FileCreateInfo {
-    std::string     filePath;
-    size_t          initial_size = static_cast<size_t>(5E6);
-};
-struct FileOpenInfo {
-    std::string     filePath;
-    bool            writeAccess = false;
-};
-struct FileResizeInfo {
-    size_t          size;
-    bool            pageAlign           = false;
-};
 struct CompressTileInfo {
     Buffer          pixelArray          = NULL;
 //    Buffer          destinationOptional = NULL;
@@ -78,9 +47,6 @@ struct DecompressImageInfo {
     Format          desiredFormat       = Iris::FORMAT_UNDEFINED;
     ImageEncoding   encoding            = IMAGE_ENCODING_UNDEFINED;
 };
-// MARK: - FILE ACCESS DATA STRUCTURES
-using FileLock = std::shared_ptr<class __INTERNAL__FileLock>;
-
 // MARK: - ENCODER STRUCTURES
 enum __tileStatus {
     TILE_FREE,
@@ -138,18 +104,16 @@ struct EncoderTracker {
     total           (0){}
 };
 struct DerivationInfo {
-    using Queue                 = Async::ThreadPool;
+    using Queue                 = Iris::Async::ThreadPool;
     using Strategy              = EncoderDerivation;
     using Tracker               = EncoderTracker;
-    using Table                 = Abstraction::TileTable;
-    using AtomicOffset          = atomic_uint64;
-    const Context&  context;
-    const Queue&    queue;
-    const Strategy& strategy;
-    const File&     file;
-    Tracker&        tracker;
-    Table&          table;
-    AtomicOffset&   offset;
+    using Table                 = Iris::File::BuilderTileTableInfo;
+    const Context&              context;
+    const Queue&                queue;
+    const Strategy&             strategy;
+    const Iris::File::Builder&  builder;
+    const Table&                table;
+    Tracker&                    tracker;
 };
 } // END IRIS CODEC NAMESPACE
 #endif /* IrisCodecPrivTypes_h */

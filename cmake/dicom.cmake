@@ -43,7 +43,7 @@ if (NOT DICOM_LIBRARY OR NOT DICOM_INCLUDE)
     ExternalProject_Add(
         libdicom
         GIT_REPOSITORY https://github.com/ImagingDataCommons/libdicom.git
-        GIT_TAG main
+        GIT_TAG "${IRIS_DEP_LIBDICOM}"
         GIT_SHALLOW ON
         UPDATE_DISCONNECTED ON
         BUILD_BYPRODUCTS ${DICOM_LIBRARY}

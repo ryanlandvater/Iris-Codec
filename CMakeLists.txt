@@ -4,6 +4,8 @@
 cmake_minimum_required(VERSION 3.27)
 include(FetchContent)
 include(ExternalProject)
+# Every pinned third-party version lives in one file; see cmake/dependencies.cmake.
+include(${CMAKE_CURRENT_LIST_DIR}/cmake/dependencies.cmake)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -63,20 +65,20 @@ endif()
 
 FetchContent_Declare (
     VulkanHeaders
-    URL https://github.com/KhronosGroup/Vulkan-Headers/archive/refs/tags/vulkan-sdk-1.4.309.0.tar.gz
+    URL https://github.com/KhronosGroup/Vulkan-Headers/archive/refs/tags/${IRIS_DEP_VULKAN_SDK}.tar.gz
 )
 FetchContent_Declare (
     VkMemoryAllocator
-    URL https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator/archive/refs/tags/v3.2.1.tar.gz
-    URL_HASH SHA256=5e7749504cb802427ffb7bec38a0b6a15db46ae253f00560acb3e624d9fe695c
+    URL https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator/archive/refs/tags/${IRIS_DEP_VMA}.tar.gz
+    URL_HASH SHA256=${IRIS_DEP_VMA_SHA256}
 )
 set(GLM_BUILD_LIBRARY OFF)
 set(GLM_BUILD_INSTALL OFF)
 set(GLM_BUILD_TESTS   OFF)
 FetchContent_Declare (
     GLM
-    URL https://github.com/g-truc/glm/archive/refs/tags/1.0.1.tar.gz
-    URL_HASH SHA256=9f3174561fd26904b23f0db5e560971cbf9b3cbda0b280f04d5c379d03bf234c
+    URL https://github.com/g-truc/glm/archive/refs/tags/${IRIS_DEP_GLM}.tar.gz
+    URL_HASH SHA256=${IRIS_DEP_GLM_SHA256}
 )
 FetchContent_MakeAvailable(
     VulkanHeaders 
@@ -187,7 +189,6 @@ set (
     IrisCodecSources
     ${irisheaders_SOURCE_DIR}/src/IrisSIMD.cpp
     ${CODEC_SOURCE_DIR}/IrisCodecContext.cpp
-    ${CODEC_SOURCE_DIR}/IrisCodecFile.cpp
     ${CODEC_SOURCE_DIR}/IrisCodecCache.cpp
     ${CODEC_SOURCE_DIR}/IrisCodecSlide.cpp
 )
@@ -356,7 +357,7 @@ if(IRIS_BUILD_PYTHON)
     FetchContent_Declare (
         Pybind11
         GIT_REPOSITORY https://github.com/pybind/pybind11.git
-        GIT_TAG "a2e59f0" #"origin/main"
+        GIT_TAG "${IRIS_DEP_PYBIND11}"
         GIT_SHALLOW ON
         FETCHCONTENT_QUIET ON
     )

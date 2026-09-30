@@ -40,7 +40,7 @@ if (NOT PNG_LIBRARY OR NOT PNG_INCLUDE)
     ExternalProject_Add(
         Zlib-ng
         GIT_REPOSITORY https://github.com/zlib-ng/zlib-ng.git
-        GIT_TAG "2.2.4"
+        GIT_TAG "${IRIS_DEP_ZLIB_NG}"
         GIT_SHALLOW ON
         UPDATE_DISCONNECTED ON
         BUILD_BYPRODUCTS ${ZLIB_LIBRARY} # Ninja compatability
@@ -59,7 +59,7 @@ if (NOT PNG_LIBRARY OR NOT PNG_INCLUDE)
     ExternalProject_Add(
         Png
         GIT_REPOSITORY https://github.com/pnggroup/libpng.git
-        GIT_TAG "51f5bd68b9b806d2c92b4318164d28b49357da31" #"origin/main"
+        GIT_TAG "${IRIS_DEP_LIBPNG}"
         GIT_SHALLOW ON
         UPDATE_DISCONNECTED ON
         BUILD_BYPRODUCTS ${PNG_LIBRARY} # Ninja compatability

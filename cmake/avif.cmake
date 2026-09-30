@@ -35,7 +35,7 @@ if (NOT AVIF_LIBRARY OR NOT AVIF_INCLUDE)
     ExternalProject_Add(
         Avif
         GIT_REPOSITORY https://github.com/AOMediaCodec/libavif.git
-        GIT_TAG "a28899a" #"origin/main"
+        GIT_TAG "${IRIS_DEP_LIBAVIF}"
         GIT_SHALLOW ON
         UPDATE_DISCONNECTED ON
         BUILD_BYPRODUCTS ${AVIF_LIBRARY} # Ninja compatability

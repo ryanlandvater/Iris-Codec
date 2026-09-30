@@ -90,12 +90,12 @@ inline Subtile DOWNSAMPLE_4x_AVG (const Buffer& src, const Buffer& dst, uint32_t
     Iris::SIMD::Downsample_into_tile_4x_avg(src, dst, s_y, s_x, channels);
     return 1<<((s_y<<2)|s_x);
 }
-inline void GENERATE_TILE_BUFFER (Buffer& pixels, const Abstraction::TileTable& table)
+inline void GENERATE_TILE_BUFFER (Buffer& pixels, Format format)
 {
     assert(pixels == NULL && "Tile buffers are already allocated");
-    
+
     int bpp = 0;
-    switch (table.format) {
+    switch (format) {
         case Iris::FORMAT_B8G8R8:
         case Iris::FORMAT_R8G8B8:
             bpp = 3;
@@ -229,7 +229,7 @@ inline void DOWNSAMPLE_TILE (const DerivationInfo& info,
         // First thread here; allocate the tile pixel array (bytes)
         case TILE_FREE: tile.status.store(TILE_INITIALIZING);
         ALLOCATE_TILE:
-            GENERATE_TILE_BUFFER(tile.pixels, info.table);
+            GENERATE_TILE_BUFFER(tile.pixels, info.table.format);
             SET_SUBTILE_TRACKER(tile.subtile, info, l, y, x);
             tile.status.store(TILE_READING);
             tile.status.notify_all();
@@ -286,11 +286,7 @@ void ENCODE_DERIVED_TILE (const DerivationInfo& info,
                "ENCODE_DERIVED_TILE layer index out of tracker bounds");
         assert((y * extent.layers[l].xTiles + x) < tracker.layers[l].size() &&
                "ENCODE_DERIVED_TILE tile index out of tracker bounds");
-        assert(l < table.layers.size() &&
-               "ENCODE_DERIVED_TILE layer index out of file tile table bounds");
-        assert((y * extent.layers[l].xTiles + x) < table.layers[l].size() &&
-               "ENCODE_DERIVED_TILE layer index out of file tile table bounds");
-        
+
         //  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
         //  CAPTURE TILE STEP
         //  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
@@ -325,27 +321,7 @@ void ENCODE_DERIVED_TILE (const DerivationInfo& info,
         //  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
         //  WRITE TO FILE STEP
         //  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
-        auto& file      = info.file;
-        auto& entry     = table.layers[l][t];
-        entry.size      = U32_CAST(stream->size());
-        entry.offset    = info.offset.fetch_add(entry.size);
-        ReadLock shared_write_lock (file->resize);
-        if (entry.offset + entry.size > file->size) {
-            shared_write_lock.unlock();
-            WriteLock resize_lock (file->resize);
-            // Expand the file by 500 MB per expansion
-            // We will shrink it back down to size at the end.
-            auto result = resize_file(file, FileResizeInfo {
-                .size = file->size + (size_t)5E8,
-            });
-            if (result != IRIS_SUCCESS)
-                throw std::runtime_error("Failed to resize growing tile blocks");
-            resize_lock.unlock();
-            shared_write_lock.lock();
-        }
-        auto dst = file->ptr + entry.offset;
-        memcpy(dst, stream->data(), entry.size);
-        shared_write_lock.unlock();
+        info.builder.append_tile(l, t, static_cast<const BYTE*>(stream->data()), stream->size());
         //  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
         //  RELEASE TILE STEP
         //  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
@@ -353,7 +329,7 @@ void ENCODE_DERIVED_TILE (const DerivationInfo& info,
         tile.pixels = NULL;
         tile.stream = NULL;
         tracker.completed++;
-    } catch (std::runtime_error &error) {
+    } catch (const std::exception &error) {   // the Builder refuses with logic_error kinds too
         _status->store(ENCODER_ERROR);
         MutexLock __ (tracker.error_msg_mutex);
         tracker.error_msg += std::string("Derived tile encoding failed: ") +

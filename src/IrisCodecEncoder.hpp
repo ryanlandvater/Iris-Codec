@@ -10,13 +10,7 @@
 namespace IrisCodec {
 struct EncoderTracker;
 using AtomicEncoderStatus           = std::atomic<EncoderStatus>;
-using DerivationQueue               = Iris::Async::ThreadPool;
 class __INTERNAL__Encoder {
-    enum SourceType {
-        ENCODER_SOURCE_UNDEFINED    = 0,
-        ENCODER_SOURCE_FILE,
-        ENCODER_SOURCE_CACHE
-    }                               _srcType        = ENCODER_SOURCE_UNDEFINED;
     unsigned                        _concurrency    = std::thread::hardware_concurrency();
     bool                            _derive;
     const Context                   _context;
@@ -42,7 +36,6 @@ public:
     Result  get_encoder_progress    (EncoderProgress&) const;
     
     void    set_src_path            (const std::string& source);
-    void    set_src_cache           (const Cache& source);
     void    set_dst_path            (const std::string& destination);
     void    set_encoding            (Encoding desired_encoding);
     Result  reset_encoder           ();
