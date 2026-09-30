@@ -6,3 +6,10 @@ src/IrisCodecExtension.hpp
 src/IrisCodecExtension.cpp
 src/IrisCodecCore.hpp
 src/IrisCodecTypes.hpp
+
+# Working notes between sessions — a record of what was measured and what fooled
+# us, superseded the moment the next session measures again. Never part of the
+# repository: what survives a handoff belongs in a README, a comment on the code
+# it describes, or a test. Ignored rather than merely uncommitted so `git add -A`
+# cannot quietly promote one to a permanent document.
+*_handoff.md
