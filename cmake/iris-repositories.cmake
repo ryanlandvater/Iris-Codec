@@ -11,7 +11,10 @@
 # repositories in isolation before it reaches the Org — which keeps building
 # the tips it already depends on. The owner comes from GITHUB_REPOSITORY in CI,
 # else this checkout's `origin`; override with -DIRIS_DEPS_OWNER=<owner> or a
-# full -DIRIS_HEADERS_REPOSITORY / -DIRIS_FILE_EXTENSION_REPOSITORY.
+# full -DIRIS_HEADERS_REPOSITORY / -DIRIS_FILE_EXTENSION_REPOSITORY. There is no
+# fallback to IrisDigitalPathology: a fork builds against its own forks, and a
+# source tree that cannot name its owner (no GitHub `origin`) must be told. The
+# PyPI sdist is: distribute-pypi.yml records the owner in its CMake arguments.
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 include(FetchContent)
 
@@ -31,13 +34,19 @@ if (NOT IRIS_DEPS_OWNER)
             ERROR_QUIET RESULT_VARIABLE _iris_origin_rc)
         if (_iris_origin_rc EQUAL 0 AND _iris_origin MATCHES "github\\.com[:/]([^/]+)/")
             set(IRIS_DEPS_OWNER "${CMAKE_MATCH_1}")
-        else()
-            set(IRIS_DEPS_OWNER "IrisDigitalPathology")
         endif()
     endif()
 endif()
 set(IRIS_HEADERS_REPOSITORY "" CACHE STRING "Iris-Headers git URL (empty: from owner)")
 set(IRIS_FILE_EXTENSION_REPOSITORY "" CACHE STRING "Iris-File-Extension git URL (empty: from owner)")
+if (NOT IRIS_DEPS_OWNER AND (NOT IRIS_HEADERS_REPOSITORY OR NOT IRIS_FILE_EXTENSION_REPOSITORY))
+    message(FATAL_ERROR
+        "Cannot tell which GitHub owner to fetch Iris-Headers and Iris-File-Extension "
+        "from: GITHUB_REPOSITORY is unset and this source tree has no GitHub `origin` "
+        "(git said: '${_iris_origin}'). Pass -DIRIS_DEPS_OWNER=<owner> "
+        "(IrisDigitalPathology for the Org's repositories), or full "
+        "-DIRIS_HEADERS_REPOSITORY / -DIRIS_FILE_EXTENSION_REPOSITORY URLs.")
+endif()
 if (NOT IRIS_HEADERS_REPOSITORY)
     set(IRIS_HEADERS_REPOSITORY "https://github.com/${IRIS_DEPS_OWNER}/Iris-Headers.git")
 endif()

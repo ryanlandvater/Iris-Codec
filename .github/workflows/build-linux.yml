@@ -62,22 +62,13 @@ jobs:
         # objects hit only when the inputs are unchanged.
         key: ccache-${{ runner.os }}
     
-    - name: Check out Iris-File-Extension (this owner's fork if present, else upstream)
-      # FetchContent pulls IrisDigitalPathology/Iris-File-Extension by default;
-      # FETCHCONTENT_SOURCE_DIR_IRISFILEEXTENSION redirects it to this owner's
-      # fork when one exists, so a fork's CI tests the fork's IFE. The
-      # CMakeLists.txt probe makes a missing or empty fork fall back upstream.
+    - name: Check out Iris-File-Extension (this owner's fork)
+      # This owner's fork, never IrisDigitalPathology: a fork's CI tests its own
+      # IFE, and a fork that has none fails here rather than quietly building
+      # against the Org's.
       shell: bash
       run: |
-        if git clone --depth 1 "https://github.com/${{ github.repository_owner }}/Iris-File-Extension.git" "${RUNNER_TEMP}/ife" && \
-           [ -f "${RUNNER_TEMP}/ife/CMakeLists.txt" ]; then
-          echo "using ${{ github.repository_owner }}/Iris-File-Extension"
-        else
-          echo "no usable ${{ github.repository_owner }}/Iris-File-Extension" \
-               "(any clone error above is expected) - falling back to IrisDigitalPathology"
-          rm -rf "${RUNNER_TEMP}/ife"
-          git clone --depth 1 "https://github.com/IrisDigitalPathology/Iris-File-Extension.git" "${RUNNER_TEMP}/ife"
-        fi
+        git clone --depth 1 "https://github.com/${{ github.repository_owner }}/Iris-File-Extension.git" "${RUNNER_TEMP}/ife"
 
     - name: Configure CMake
       run: >
