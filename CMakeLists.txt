@@ -4,8 +4,6 @@
 cmake_minimum_required(VERSION 3.27)
 include(FetchContent)
 include(ExternalProject)
-# Every pinned third-party version lives in one file; see cmake/dependencies.cmake.
-include(${CMAKE_CURRENT_LIST_DIR}/cmake/dependencies.cmake)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -62,6 +60,15 @@ if (NOT IRIS_BUILD_ENCODER)
     message(WARNING "Iris Codec is configured with IRIS_BUILD_ENCODER=OFF and will build the DECODER ONLY.")
 endif()
 
+PROJECT (
+    IrisCodec
+    LANGUAGES CXX
+    VERSION ${IRIS_CODEC_VERSION_STRING}
+)
+
+# Iris-Headers and Iris-File-Extension, from this repository's owner; shared
+# with the JavaScript build.
+include(${CMAKE_CURRENT_LIST_DIR}/cmake/iris-repositories.cmake)
 
 FetchContent_Declare (
     VulkanHeaders
@@ -85,16 +92,6 @@ FetchContent_MakeAvailable(
     VkMemoryAllocator
     GLM
 )
-
-PROJECT (
-    IrisCodec
-    LANGUAGES CXX
-    VERSION ${IRIS_CODEC_VERSION_STRING}
-)
-
-# Iris-Headers and Iris-File-Extension, from this repository's owner; shared
-# with the JavaScript build.
-include(${CMAKE_CURRENT_LIST_DIR}/cmake/iris-repositories.cmake)
 
 # Threading
 set(THREADS_PREFER_PTHREAD_FLAG ON)

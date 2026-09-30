@@ -12,7 +12,7 @@ endif()
 
 # OpenSlide was not found on the system, so pull the prebuilt binaries. It is
 # deliberately not built from source — its Meson build has proven buggy and
-# frustrating. The version comes from cmake/dependencies.cmake, and the release
+# frustrating. The version comes from Iris-Headers' cmake/dependencies.cmake, and the release
 # URL and the extracted directory are BOTH derived from it, so they can never
 # disagree (they used to: the log said 4.0.0.6 while the download fetched
 # 4.0.0.5, across four platform branches each spelling the version by hand).

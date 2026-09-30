@@ -86,3 +86,5 @@ FetchContent_MakeAvailable(
     IrisFileExtension
 )
 message(STATUS "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
+# Every third-party version is pinned in Iris-Headers, fetched first.
+include(${irisheaders_SOURCE_DIR}/cmake/dependencies.cmake)
