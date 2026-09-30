@@ -550,6 +550,7 @@ inline EncoderSource OPEN_SOURCE (const std::string& path_, const Context contex
         
         source.extent       = source.irisSlide->get_slide_info().extent;
         source.format       = source.irisSlide->get_slide_info().format;
+        source.encoding     = source.irisSlide->get_slide_info().encoding;
             
         return source;
     }
@@ -754,9 +755,11 @@ inline static void ENCODE_DERIVE_PYRAMID (const Context ctx,
                 //  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ //
                 tile.stream     = GET_SOURCE_TILE (src, src_l, __TI);
                 if (tile.stream) {
+                    // Decode into the tile table's format: derived tiles are
+                    // downsampled and recompressed as that format.
                     tile.pixels = ctx->decompress_tile({
                         .compressed     = tile.stream,
-                        .desiredFormat  = FORMAT_R8G8B8A8,
+                        .desiredFormat  = src.format,
                         .encoding       = src.encoding,
                     });
                 }
